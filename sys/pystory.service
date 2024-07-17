@@ -1,0 +1,11 @@
+[Unit]
+Description=Capture screenshot and webcam picture every 5 minutes
+After=network.target
+
+[Service]
+ExecStartPre=/usr/bin/env bash -c 'echo STARTING PYSTORY'
+ExecStart=/usr/bin/env bash -c 'command -v pyenv >/dev/null || export PATH="${PYENV_ROOT}/bin:${PATH}" && eval "$(pyenv init -)" && eval "$(pyenv virtualenv-init -)" && pystory}'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,2 +1,3 @@
 # pystory
-Python application to periodically capture images from a webcam and take screenshots
+
+A simple Python application for periodically capturing a  history of this computer's user and usage (camera + screenshots).

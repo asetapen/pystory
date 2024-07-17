@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "pystory"
+version = "0.1.0"
+description = "history of this pc"
+authors = ["Adam Setapen <asetapen@gmail.com>"]
+license = "MIT License"
+readme = "README.md"
+packages = [{ include = "*", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+opencv-python = "^4.10.0.84"
+pyautogui = "^0.9.54"
+
+[tool.poetry.scripts]
+pystory = 'pystory.main:main'
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
