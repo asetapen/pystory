@@ -9,6 +9,7 @@ import cv2
 
 from pystory.capture import take_screenshot, take_webcam_picture, detect_face
 from pystory.config import Config
+from pystory.recognition import is_recognized, load_encodings
 from pystory.storage import prune_old_files
 
 log = logging.getLogger("pystory")
@@ -26,6 +27,8 @@ def parse_args() -> Config:
     p.add_argument("--max-history-mb", type=int, help="Max storage in MB before pruning")
     p.add_argument("--no-face-hook", type=str, help="Command to run when no face detected")
     p.add_argument("--no-face-detection", action="store_true", help="Disable face detection")
+    p.add_argument("--no-face-recognition", action="store_true", help="Disable face recognition (detection only)")
+    p.add_argument("--face-tolerance", type=float, help="Face match tolerance (lower = stricter, default: 0.6)")
     p.add_argument("--no-screenshot", action="store_true", help="Disable screenshots")
     p.add_argument("--no-webcam", action="store_true", help="Disable webcam capture")
     p.add_argument("--debug-ui", action="store_true", help="Show live preview windows")
@@ -47,6 +50,10 @@ def parse_args() -> Config:
         config.no_face_hook = args.no_face_hook
     if args.no_face_detection:
         config.face_detection_enabled = False
+    if args.no_face_recognition:
+        config.face_recognition_enabled = False
+    if args.face_tolerance is not None:
+        config.face_tolerance = args.face_tolerance
     if args.no_screenshot:
         config.screenshot_enabled = False
     if args.no_webcam:
@@ -96,8 +103,19 @@ def tick(config: Config) -> None:
             log.error("Webcam failed: %s", e)
 
     if config.face_detection_enabled and webcam_frame is not None:
-        if not detect_face(webcam_frame):
-            run_hook(config)
+        if config.face_recognition_enabled:
+            result = is_recognized(webcam_frame, config)
+            if result is None:
+                log.info("No face detected")
+                run_hook(config)
+            elif result is False:
+                log.info("Face detected but not recognized")
+                run_hook(config)
+            else:
+                log.debug("Face recognized")
+        else:
+            if not detect_face(webcam_frame):
+                run_hook(config)
 
     if config.debug_ui:
         if screenshot_frame is not None:

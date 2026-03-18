@@ -6,11 +6,11 @@ Targets Ubuntu 24.
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
-
 ```bash
-uv sync
+./install.sh
 ```
+
+This installs system dependencies (`cmake`, `build-essential`, `python3-dev`), [uv](https://docs.astral.sh/uv/getting-started/installation/) if needed, and Python packages.
 
 ## Usage
 
@@ -39,9 +39,34 @@ uv run pystory \
 | `--max-history-mb` | `500` | Prunes oldest files when exceeded |
 | `--no-face-hook` | `loginctl lock-session` | Command to run when no face is detected |
 | `--no-face-detection` | | Disable face detection entirely |
+| `--no-face-recognition` | | Use detection only (any face prevents locking) |
+| `--face-tolerance` | `0.6` | Face match tolerance (lower = stricter) |
 | `--no-screenshot` | | Disable screenshot capture |
 | `--no-webcam` | | Disable webcam capture |
 | `--debug-ui` | | Show live preview windows (press `q` to quit) |
+
+## Face Recognition
+
+By default, pystory uses face recognition so only *your* face prevents the screen from locking. First, enroll your face:
+
+```bash
+# capture 5 samples (press SPACE for each, Q to finish early)
+uv run pystory-enroll
+
+# or capture more samples for better accuracy
+uv run pystory-enroll --samples 10
+
+# re-enroll from scratch
+uv run pystory-enroll --reset
+```
+
+Once enrolled, pystory will lock the screen if it sees no face *or* an unrecognized face. If no faces are enrolled, it falls back to detection-only mode (any face prevents locking).
+
+To disable recognition and use detection-only mode explicitly:
+
+```bash
+uv run pystory --no-face-recognition
+```
 
 ## Debug UI
 

@@ -10,11 +10,14 @@ dependencies = [
     "opencv-python>=4.10",
     "mss>=9.0",
     "pillow>=10.0",
+    "face_recognition>=1.3",
+    "setuptools<82",
 ]
 
 [project.scripts]
 pystory = "pystory.main:main"
 pystory-timelapse = "pystory.timelapse:main"
+pystory-enroll = "pystory.enroll:main"
 
 [build-system]
 requires = ["hatchling"]
