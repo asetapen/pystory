@@ -18,6 +18,10 @@ dependencies = [
 pystory = "pystory.main:main"
 pystory-timelapse = "pystory.timelapse:main"
 pystory-enroll = "pystory.enroll:main"
+pystory-s3-archive = "pystory.s3_archive:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["hatchling"]

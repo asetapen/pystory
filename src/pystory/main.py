@@ -9,6 +9,8 @@ import cv2
 
 from pystory.capture import take_screenshot, take_webcam_picture, detect_face
 from pystory.config import Config
+from pystory.obsbot import disable_tracking, enable_tracking
+from pystory.presence import PresenceTracker
 from pystory.recognition import is_recognized, load_encodings
 from pystory.storage import prune_old_files
 
@@ -32,6 +34,16 @@ def parse_args() -> Config:
     p.add_argument("--no-screenshot", action="store_true", help="Disable screenshots")
     p.add_argument("--no-webcam", action="store_true", help="Disable webcam capture")
     p.add_argument("--debug-ui", action="store_true", help="Show live preview windows")
+    p.add_argument("--presence-confirm-ticks", type=int,
+                    help="Consecutive same-result ticks needed before locking/unlocking (default: 2)")
+    p.add_argument("--lock-overlay", action="store_true",
+                    help="Show a fullscreen block overlay instead of/alongside --no-face-hook")
+    p.add_argument("--lock-passphrase", type=str, help="Passphrase that dismisses the lock overlay")
+    p.add_argument("--lock-panic-hotkey", type=str,
+                    help="Tk keysym that force-dismisses the overlay (default: <Control-Alt-Escape>)")
+    p.add_argument("--obsbot-tracking", action="store_true",
+                    help="Enable/disable OBSBOT AI tracking based on presence")
+    p.add_argument("--obsbot-cli-path", type=str, help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
     args = p.parse_args()
     config = Config()
@@ -60,6 +72,18 @@ def parse_args() -> Config:
         config.webcam_enabled = False
     if args.debug_ui:
         config.debug_ui = True
+    if args.presence_confirm_ticks is not None:
+        config.presence_confirm_ticks = args.presence_confirm_ticks
+    if args.lock_overlay:
+        config.lock_overlay_enabled = True
+    if args.lock_passphrase:
+        config.lock_passphrase = args.lock_passphrase
+    if args.lock_panic_hotkey:
+        config.lock_panic_hotkey = args.lock_panic_hotkey
+    if args.obsbot_tracking:
+        config.obsbot_tracking_enabled = True
+    if args.obsbot_cli_path:
+        config.obsbot_cli_path = args.obsbot_cli_path
 
     return config
 
@@ -80,7 +104,17 @@ def show_debug(title: str, frame, max_width: int = 800) -> None:
     cv2.imshow(title, frame)
 
 
-def tick(config: Config) -> None:
+class AppState:
+    """Tracks whether we're currently 'locked' so hooks/overlay/tracking only
+    fire on state transitions, not every tick."""
+
+    def __init__(self) -> None:
+        self.presence = PresenceTracker()
+        self.locked = False
+        self.lock_overlay = None
+
+
+def tick(config: Config, state: AppState) -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     screenshot_frame = None
@@ -105,17 +139,32 @@ def tick(config: Config) -> None:
     if config.face_detection_enabled and webcam_frame is not None:
         if config.face_recognition_enabled:
             result = is_recognized(webcam_frame, config)
+            recognized = result is True
             if result is None:
                 log.info("No face detected")
-                run_hook(config)
             elif result is False:
                 log.info("Face detected but not recognized")
-                run_hook(config)
             else:
                 log.debug("Face recognized")
         else:
-            if not detect_face(webcam_frame):
-                run_hook(config)
+            recognized = detect_face(webcam_frame)
+
+        state.presence.observe(recognized)
+        decision = state.presence.should_be_locked
+        if decision is True and not state.locked:
+            state.locked = True
+            run_hook(config)
+            if state.lock_overlay is not None:
+                state.lock_overlay.show()
+            if config.obsbot_tracking_enabled:
+                disable_tracking(config)
+        elif decision is False and state.locked:
+            state.locked = False
+            log.info("Presence confirmed, unlocking")
+            if state.lock_overlay is not None:
+                state.lock_overlay.hide()
+            if config.obsbot_tracking_enabled:
+                enable_tracking(config)
 
     if config.debug_ui:
         if screenshot_frame is not None:
@@ -139,9 +188,16 @@ def main() -> None:
 
     log.info("Starting pystory (interval=%ds, storage=%s)", config.interval_seconds, config.storage_dir)
 
+    state = AppState()
+    state.presence.confirm_ticks = config.presence_confirm_ticks
+    if config.lock_overlay_enabled:
+        from pystory.lockscreen import LockOverlay
+        state.lock_overlay = LockOverlay(config)
+        state.lock_overlay.start()
+
     try:
         while True:
-            tick(config)
+            tick(config, state)
             if config.debug_ui:
                 key = cv2.waitKey(config.interval_seconds * 1000)
                 if key == ord("q"):

@@ -1,0 +1,9 @@
+[Unit]
+Description=pystory - periodic S3 archive trigger
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

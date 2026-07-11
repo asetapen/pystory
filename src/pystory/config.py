@@ -16,3 +16,25 @@ class Config:
     screenshot_enabled: bool = True
     webcam_enabled: bool = True
     debug_ui: bool = False
+
+    # Presence debouncing: consecutive same-direction ticks needed before
+    # acting on a lock/unlock decision.
+    presence_confirm_ticks: int = 2
+
+    # Desk-lock overlay (see lockscreen.py). This is a foreground Tk window,
+    # not a real session lock — see README for why.
+    lock_overlay_enabled: bool = False
+    lock_passphrase: str = ""
+    lock_panic_hotkey: str = "<Control-Alt-Escape>"
+
+    # OBSBOT camera tracking (see obsbot.py).
+    obsbot_tracking_enabled: bool = False
+    obsbot_cli_path: str = "obsbot-cli"
+    obsbot_ai_mode: int = 2  # 2 = Single Human Tracking
+    obsbot_ai_sub_mode: int = 1  # 1 = UpperBody
+
+    # S3 capture archival (see s3_archive.py).
+    s3_archive_uri: str = ""  # e.g. s3://my-bucket/pystory-captures/
+    s3_archive_interval_seconds: int = 3600
+    s3_archive_min_age_seconds: int = 600
+    s3_archive_delete_after_upload: bool = True
