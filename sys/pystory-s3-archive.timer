@@ -1,9 +1,10 @@
 [Unit]
-Description=pystory - periodic S3 archive trigger
+Description=pystory - nightly S3 archive trigger
 
 [Timer]
-OnBootSec=10min
-OnUnitActiveSec=1h
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=15min
 
 [Install]
 WantedBy=timers.target

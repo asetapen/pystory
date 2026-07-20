@@ -30,6 +30,9 @@ uv run pystory-timelapse --type webcam --fps 30
 # Archive old captures to S3
 uv run pystory-s3-archive --s3-uri s3://bucket/prefix/
 
+# Browse captures in a local web UI (http://127.0.0.1:8420/)
+uv run pystory-web
+
 # Install as systemd user service
 cp sys/pystory.service ~/.config/systemd/user/
 systemctl --user enable --now pystory
@@ -41,12 +44,13 @@ uv run pytest
 
 ## Architecture
 
-All source is in `src/pystory/`. Four CLI entrypoints defined in `pyproject.toml [project.scripts]`:
+All source is in `src/pystory/`. Five CLI entrypoints defined in `pyproject.toml [project.scripts]`:
 
 - **`pystory`** → `main.py:main` — Main capture loop. Each tick: screenshot (mss) → webcam (opencv) → face check → debounce via `PresenceTracker` → on a state transition: hook / lock overlay / OBSBOT tracking → prune old files. `--debug-ui` uses `cv2.imshow` with `cv2.waitKey` as the sleep mechanism.
 - **`pystory-enroll`** → `enroll.py:main` — Auto-captures face samples from the webcam while cycling pose prompts (straight/left/right/chin up/chin down) and stores dlib encodings as JSON in `~/.pystory/face_encodings.json`.
 - **`pystory-timelapse`** → `timelapse.py:main` — Reads stored JPEGs sorted by filename (embeds timestamp) and stitches into MP4 via `cv2.VideoWriter`.
-- **`pystory-s3-archive`** → `s3_archive.py:main` — Uploads captures older than `--min-age` to a configurable S3 URI via the `aws` CLI and deletes the local copy (unless `--keep-local`). Can loop with `--interval` or run as a systemd timer (`sys/pystory-s3-archive.{service,timer}`).
+- **`pystory-s3-archive`** → `s3_archive.py:main` — Uploads captures older than `--min-age` to a configurable S3 URI via the `aws` CLI and deletes the local copy (unless `--keep-local`). Can loop with `--interval` or run as a systemd timer (`sys/pystory-s3-archive.{service,timer}`, fires nightly at 03:30 by default).
+- **`pystory-web`** → `web.py:main` — Local web viewer (stdlib `http.server`, no extra deps) for scrubbing through captures day by day. Binds `127.0.0.1:8420` by default — no auth, so don't rebind it to a non-localhost host without adding your own. Groups files by the `YYYYMMDD` embedded in the filename (`list_days`/`list_ticks_for_day`, pure and testable); `/api/days`, `/api/days/<day>`, `/captures/<filename>` back a single-page UI. Only sees what's still on local disk — captures the nightly S3 job has archived-and-deleted are gone from the viewer too.
 
 Module dependency flow: `main.py` → `capture.py`, `recognition.py`, `presence.py`, `storage.py`, `obsbot.py`, `lockscreen.py` (lazy-imported), `config.py`. Everything reads from `Config` dataclass.
 

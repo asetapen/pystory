@@ -155,14 +155,58 @@ uv run pystory-s3-archive --s3-uri s3://my-bucket/pystory-captures/ --interval 3
 
 Requires the `aws` CLI on `PATH` and configured credentials (`aws configure`
 or an instance/role profile) with `s3:PutObject` on the destination bucket.
-To run it periodically without keeping a process alive, install it as a
-systemd timer:
+To run it nightly without keeping a process alive, install it as a systemd
+timer:
 
 ```bash
 cp sys/pystory-s3-archive.service sys/pystory-s3-archive.timer ~/.config/systemd/user/
 # edit the --s3-uri in the installed .service file first
 systemctl --user daemon-reload
 systemctl --user enable --now pystory-s3-archive.timer
+```
+
+The timer fires once a night at 03:30 (with a randomized delay of up to 15
+minutes, and `Persistent=true` so a missed run fires on the next boot/login).
+Check the last run:
+
+```bash
+systemctl --user status pystory-s3-archive.timer
+journalctl --user -u pystory-s3-archive -f
+```
+
+## Web viewer
+
+`pystory-web` serves a local web page to scrub through your captures day by
+day:
+
+```bash
+uv run pystory-web
+```
+
+Open `http://127.0.0.1:8420/`. Pick a day with the prev/next buttons, then
+drag the scrubber (or use arrow keys) to step through that day's ticks,
+screenshot and webcam side by side.
+
+| Flag | Default | Description |
+|------|---------|--------------|
+| `--storage-dir` | `~/.pystory` | Where captures are stored |
+| `--host` | `127.0.0.1` | Bind address |
+| `--port` | `8420` | Bind port |
+
+Binds to localhost only by default — there's no auth, and these are webcam
+pictures of you, so don't point `--host` at `0.0.0.0` on a shared network
+without adding your own auth in front (e.g. an SSH tunnel to reach it
+remotely: `ssh -NL 8420:localhost:8420 <this-machine>`).
+
+Only shows captures currently on local disk — once the nightly S3 archive
+job uploads and deletes a day's files, they drop out of the viewer.
+
+To keep it running in the background:
+
+```bash
+cp sys/pystory-web.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now pystory-web
 ```
 
 ## Debug UI
