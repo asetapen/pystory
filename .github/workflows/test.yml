@@ -1,0 +1,54 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system build and runtime deps
+        # cmake + build-essential: face_recognition pulls dlib, which ships
+        # only an sdist and needs a C++ toolchain to build (see CLAUDE.md).
+        # libgl1 + libglib2.0-0: opencv-python's cv2 extension links
+        # libGL.so.1 and libglib-2.0.so.0, so a bare runner cannot even
+        # import cv2 without them.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libgl1 libglib2.0-0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        # Plain sync, not --locked: uv.lock is gitignored in this repo, so
+        # there is no committed lock to validate against. If a lock is ever
+        # committed, switch this to `uv sync --locked` and add back a job
+        # that greps it for non-public index hosts.
+        run: uv sync --python 3.12
+
+      - name: Run test suite
+        # requires-python is ">=3.12", a single floor, so one job is honest
+        # here; no version matrix.
+        #
+        # pytest exits 5 when it collects no tests. main currently has no
+        # tests/ directory, so without this guard the very first run of this
+        # workflow would go red on a repo that is not actually broken. Any
+        # real failure still exits 1 and still fails the build.
+        run: |
+          set +e
+          uv run --python 3.12 pytest -q
+          rc=$?
+          set -e
+          if [ "$rc" -eq 5 ]; then
+            echo "::warning::pytest collected no tests (exit 5); treating as pass. Remove this guard once tests/ exists on main."
+            exit 0
+          fi
+          exit "$rc"
