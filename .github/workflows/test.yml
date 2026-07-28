@@ -38,13 +38,22 @@ jobs:
         # requires-python is ">=3.12", a single floor, so one job is honest
         # here; no version matrix.
         #
+        # --with pytest provisions pytest independently of the manifest, so
+        # this step does not care whether a [dependency-groups] dev group is
+        # present. That matters because the branch adding tests/ relies on
+        # another branch to declare that group: without --with, a main that
+        # has tests but no dev group gets no pytest, falls back to an
+        # interpreter without the project installed, and every test module
+        # fails collection with "No module named 'pystory'". uv still
+        # installs the project itself, so `import pystory` resolves.
+        #
         # pytest exits 5 when it collects no tests. main currently has no
         # tests/ directory, so without this guard the very first run of this
         # workflow would go red on a repo that is not actually broken. Any
         # real failure still exits 1 and still fails the build.
         run: |
           set +e
-          uv run --python 3.12 pytest -q
+          uv run --python 3.12 --with pytest pytest -q
           rc=$?
           set -e
           if [ "$rc" -eq 5 ]; then
