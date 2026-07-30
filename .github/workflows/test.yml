@@ -7,6 +7,37 @@ on:
     branches: [main]
 
 jobs:
+  commit-authors:
+    runs-on: ubuntu-24.04
+    steps:
+      # fetch-depth: 0 is required, not tidiness. The default shallow clone
+      # has no origin/main to diff against, and the check exits 2 rather than
+      # reporting a pass it cannot substantiate.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Every commit authored by Adam
+        # On pull_request, scan the PR's commits: base_ref..HEAD. On a push to
+        # main, HEAD *is* origin/main, so that same range is empty and the job
+        # would be a permanent silent no-op on exactly the branch that matters;
+        # use before..after there instead. github.event.before is all-zeroes on
+        # a branch's first push, which resolves to nothing, so fall back to the
+        # single commit rather than letting the script exit 2 on a valid event.
+        # KNOWN NARROWING: that fallback inspects only the tip, so a bad author
+        # deeper in a first push is not caught. It is the pull_request arm that
+        # actually gates merges here, and that one scans the whole PR.
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            range="origin/${{ github.base_ref }}..HEAD"
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            range="${{ github.sha }}~1..${{ github.sha }}"
+          else
+            range="${{ github.event.before }}..${{ github.sha }}"
+          fi
+          echo "Scanning $range"
+          ./sys/check-commit-authors.sh "$range"
+
   pytest:
     runs-on: ubuntu-24.04
     steps:
