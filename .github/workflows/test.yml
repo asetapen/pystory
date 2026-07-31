@@ -92,11 +92,36 @@ jobs:
         # So a bare `rc == 5 -> pass` cannot tell arm 1 from arm 3, and the
         # first run of this workflow scored green on exactly that reading.
         #
-        # `testpaths` is the discriminator: it is declared only once a suite
-        # exists, so accept exit 5 ONLY while it is absent. That makes the
-        # allowance self-retiring -- the branch that adds tests/ also adds
-        # [tool.pytest.ini_options] testpaths, which arms this check in the
-        # same commit, with no TODO for anyone to remember.
+        # `testpaths` is the discriminator, but it is NOT self-retiring, and the
+        # comment here previously claimed it was. Measured on the real branches
+        # of this repo: dev/asetapen/pystory-test-coverage declares testpaths
+        # AND ships tests/, but feature/desklock-obsbot-s3-recognition ships
+        # THREE test files (12 passing) and declares NO testpaths. So "the
+        # branch that adds tests/ also adds testpaths" is false here, and a
+        # merge of that branch would land a suite with this allowance still
+        # disarmed.
+        #
+        # A `[ -d tests ]` guard is not the answer either, and it fails in the
+        # opposite direction: it accepts exit 5 exactly when tests/ is ABSENT,
+        # which is the condition deletion CREATES, so it masks the deleted-suite
+        # case entirely. The full 2x2 over (testpaths declared?) x (suite shape):
+        #
+        #   testpaths  shape      raw  [ -d tests ]  testpaths-only  BOTH
+        #   yes        deleted     5       0 MASK        5             5
+        #   no         deleted     5       0 MASK        0 MASK        0  <- see below
+        #   yes        empty dir   5       5             5             5
+        #   no         empty dir   5       5             0 MASK        5
+        #
+        # Neither guard alone refuses every masked shape; requiring BOTH does,
+        # except for one row. Accept exit 5 only when NO collection target
+        # exists by either measure.
+        #
+        # THE UNCLOSABLE ROW is (no testpaths, suite deleted): with no
+        # declaration and no filesystem trace, nothing in the working tree
+        # distinguishes it from a repo that never had tests. It is not closed
+        # here, it is closed by declaring testpaths in whichever branch adds a
+        # suite -- which is why that is now a request to the desklock owner
+        # rather than a property this workflow can assert.
         run: |
           set +e
           uv run --python 3.12 --with pytest pytest -q
@@ -104,6 +129,14 @@ jobs:
           set -e
           if [ "$rc" -ne 5 ]; then
             exit "$rc"
+          fi
+          # A collection target that exists on disk refuses exit 5 regardless of
+          # what the manifest declares. -d alone is not enough: an EMPTY tests/
+          # is a target that collects nothing.
+          if [ -d tests ]; then
+            echo "::error::pytest collected no tests (exit 5), but a tests/ directory exists." >&2
+            echo "::error::A collection target is present and collected nothing; treating as failure." >&2
+            exit 1
           fi
           # Read the manifest with a TOML parser, not a grep: `testpaths`
           # appears in comments and in prose above, and a commented-out
