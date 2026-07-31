@@ -82,13 +82,39 @@ jobs:
         # tests/ directory, so without this guard the very first run of this
         # workflow would go red on a repo that is not actually broken. Any
         # real failure still exits 1 and still fails the build.
+        #
+        # But exit 5 is ALSO what a vanished suite returns. Measured on
+        # pytest 9.0.1 / uv 0.10.6, all four arms with the command below:
+        #   no tests/, no testpaths        -> 5  (legitimate: main today)
+        #   tests/ present, passing        -> 0
+        #   testpaths=[tests], tests/ GONE -> 5  (a deleted suite, must be RED)
+        #   tests/ present, failing        -> 1
+        # So a bare `rc == 5 -> pass` cannot tell arm 1 from arm 3, and the
+        # first run of this workflow scored green on exactly that reading.
+        #
+        # `testpaths` is the discriminator: it is declared only once a suite
+        # exists, so accept exit 5 ONLY while it is absent. That makes the
+        # allowance self-retiring -- the branch that adds tests/ also adds
+        # [tool.pytest.ini_options] testpaths, which arms this check in the
+        # same commit, with no TODO for anyone to remember.
         run: |
           set +e
           uv run --python 3.12 --with pytest pytest -q
           rc=$?
           set -e
-          if [ "$rc" -eq 5 ]; then
-            echo "::warning::pytest collected no tests (exit 5); treating as pass. Remove this guard once tests/ exists on main."
-            exit 0
+          if [ "$rc" -ne 5 ]; then
+            exit "$rc"
           fi
-          exit "$rc"
+          # Read the manifest with a TOML parser, not a grep: `testpaths`
+          # appears in comments and in prose above, and a commented-out
+          # setting would arm this gate against a repo that has no suite.
+          # Kept to ONE line on purpose: a column-0 continuation line inside
+          # this block scalar ends the scalar, and the workflow stops parsing
+          # as YAML at all.
+          if uv run --python 3.12 python -c "import sys,tomllib;cfg=tomllib.load(open('pyproject.toml','rb'));sys.exit(0 if cfg.get('tool',{}).get('pytest',{}).get('ini_options',{}).get('testpaths') else 1)"; then
+            echo "::error::pytest collected no tests (exit 5), but pyproject.toml declares testpaths." >&2
+            echo "::error::A suite is configured and did not run; treating as failure, not as an empty repo." >&2
+            exit 1
+          fi
+          echo "::warning::pytest collected no tests (exit 5) and no testpaths is declared; treating as pass."
+          exit 0
