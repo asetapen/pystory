@@ -45,6 +45,8 @@ uv run pystory \
 | `--no-webcam` | | Disable webcam capture |
 | `--debug-ui` | | Show live preview windows (press `q` to quit) |
 | `--presence-confirm-ticks` | `2` | Consecutive same-result ticks needed before locking/unlocking |
+| `--no-camera-failure-lock` | | Don't let a sustained webcam failure lock the desk (restores fail-open) |
+| `--camera-failure-grace-ticks` | `3` | Frameless ticks tolerated before a camera failure counts against presence |
 | `--lock-overlay` | | Show a fullscreen block overlay in addition to `--no-face-hook` |
 | `--lock-passphrase` | | Passphrase that dismisses the lock overlay |
 | `--lock-panic-hotkey` | `<Control-Alt-Escape>` | Tk keysym that force-dismisses the overlay |
@@ -86,6 +88,23 @@ On top of that, `pystory` debounces recognition results with
 look away) won't lock or unlock anything by itself — it takes N consecutive
 same-direction ticks. Raise it if you get spurious locks; lower it (to `1`)
 for instant response.
+
+### When the camera itself fails
+
+A webcam that returns no frame at all (unplugged, seized by another process,
+permission denied) is an *unknown* presence state, not an absent face, and the
+two safe directions conflict: treat it as absent and a momentary USB reset
+locks you out; treat it as present and a dead camera leaves the desk unlocked
+indefinitely. pystory splits the difference. The first
+`--camera-failure-grace-ticks` (default 3) consecutive failures are tolerated
+and log a warning without touching the lock state; every failure after that is
+fed to the debouncer as a miss, so `--presence-confirm-ticks` more of them then
+locks the desk. At the defaults that is 5 frameless ticks, or 25 seconds at the
+default `--interval`. Any successful capture resets the streak.
+
+Pass `--no-camera-failure-lock` if you would rather a broken camera never lock
+the desk. That is the fail-open direction, and it means a covered or
+disconnected webcam disables the lock entirely.
 
 ## Desk auto-lock overlay
 

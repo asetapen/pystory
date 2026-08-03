@@ -21,6 +21,17 @@ class Config:
     # acting on a lock/unlock decision.
     presence_confirm_ticks: int = 2
 
+    # A webcam that returns no frame is an UNKNOWN presence state, not an
+    # absent face, so it gets its own grace period before it is allowed to
+    # influence the lock decision. Tolerate this many consecutive capture
+    # failures (a momentary USB reset, a device briefly held by something
+    # else); every failure after that is fed to the presence tracker as a
+    # miss, so `presence_confirm_ticks` more of them then locks the desk.
+    # Set camera_failure_locks False to restore fail-open behaviour, where a
+    # dead camera never locks.
+    camera_failure_locks: bool = True
+    camera_failure_grace_ticks: int = 3
+
     # Desk-lock overlay (see lockscreen.py). This is a foreground Tk window,
     # not a real session lock — see README for why.
     lock_overlay_enabled: bool = False
