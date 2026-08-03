@@ -1,0 +1,217 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  commit-authors:
+    runs-on: ubuntu-24.04
+    steps:
+      # fetch-depth: 0 is required, not tidiness. The default shallow clone
+      # has no origin/main to diff against, and the check exits 2 rather than
+      # reporting a pass it cannot substantiate.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Every commit authored by Adam
+        # On pull_request, scan the PR's commits: base_ref..HEAD. On a push to
+        # main, HEAD *is* origin/main, so that same range is empty and the job
+        # would be a permanent silent no-op on exactly the branch that matters;
+        # use before..after there instead. github.event.before is all-zeroes on
+        # a branch's first push, which resolves to nothing, so fall back to the
+        # single commit rather than letting the script exit 2 on a valid event.
+        # KNOWN NARROWING: that fallback inspects only the tip, so a bad author
+        # deeper in a first push is not caught. It is the pull_request arm that
+        # actually gates merges here, and that one scans the whole PR.
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            range="origin/${{ github.base_ref }}..HEAD"
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            range="${{ github.sha }}~1..${{ github.sha }}"
+          else
+            range="${{ github.event.before }}..${{ github.sha }}"
+          fi
+          echo "Scanning $range"
+          ./sys/check-commit-authors.sh "$range"
+
+  pytest:
+    runs-on: ubuntu-24.04
+    steps:
+      # fetch-depth: 0 so the exit-5 guard below can ask HISTORY whether a test
+      # suite was DELETED. The default shallow checkout has no base commit to
+      # diff against, and the guard then cannot distinguish a deleted suite from
+      # a repo that never had one. The commit-authors job above already pays
+      # this cost in this same file.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install system build and runtime deps
+        # cmake + build-essential: face_recognition pulls dlib, which ships
+        # only an sdist and needs a C++ toolchain to build (see CLAUDE.md).
+        # libgl1 + libglib2.0-0: opencv-python's cv2 extension links
+        # libGL.so.1 and libglib-2.0.so.0, so a bare runner cannot even
+        # import cv2 without them.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libgl1 libglib2.0-0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        # Plain sync, not --locked: uv.lock is gitignored in this repo, so
+        # there is no committed lock to validate against. If a lock is ever
+        # committed, switch this to `uv sync --locked` and add back a job
+        # that greps it for non-public index hosts.
+        run: uv sync --python 3.12
+
+      - name: Run test suite
+        # requires-python is ">=3.12", a single floor, so one job is honest
+        # here; no version matrix.
+        #
+        # --with pytest provisions pytest independently of the manifest, so
+        # this step does not care whether a [dependency-groups] dev group is
+        # present. That matters because the branch adding tests/ relies on
+        # another branch to declare that group: without --with, a main that
+        # has tests but no dev group gets no pytest, falls back to an
+        # interpreter without the project installed, and every test module
+        # fails collection with "No module named 'pystory'". uv still
+        # installs the project itself, so `import pystory` resolves.
+        #
+        # pytest exits 5 when it collects no tests. main currently has no
+        # tests/ directory, so without this guard the very first run of this
+        # workflow would go red on a repo that is not actually broken. Any
+        # real failure still exits 1 and still fails the build.
+        #
+        # But exit 5 is ALSO what a vanished suite returns. Measured on
+        # pytest 9.0.1 / uv 0.10.6, all four arms with the command below:
+        #   no tests/, no testpaths        -> 5  (legitimate: main today)
+        #   tests/ present, passing        -> 0
+        #   testpaths=[tests], tests/ GONE -> 5  (a deleted suite, must be RED)
+        #   tests/ present, failing        -> 1
+        # So a bare `rc == 5 -> pass` cannot tell arm 1 from arm 3, and the
+        # first run of this workflow scored green on exactly that reading.
+        #
+        # `testpaths` is the discriminator, but it is NOT self-retiring, and the
+        # comment here previously claimed it was. Measured on the real branches
+        # of this repo: dev/asetapen/pystory-test-coverage declares testpaths
+        # AND ships tests/, but feature/desklock-obsbot-s3-recognition ships
+        # THREE test files (12 passing) and declares NO testpaths. So "the
+        # branch that adds tests/ also adds testpaths" is false here, and a
+        # merge of that branch would land a suite with this allowance still
+        # disarmed.
+        #
+        # A `[ -d tests ]` guard is not the answer either, and it fails in the
+        # opposite direction: it accepts exit 5 exactly when tests/ is ABSENT,
+        # which is the condition deletion CREATES, so it masks the deleted-suite
+        # case entirely. The full 2x2 over (testpaths declared?) x (suite shape),
+        # with the raw reading and each candidate guard:
+        #
+        #   testpaths  shape             raw  [ -d tests ]  testpaths  BOTH  +history
+        #   yes        deleted            5       0 MASK        5        5       5
+        #   no         deleted            5       0 MASK        0 MASK   0 MASK  5
+        #   yes        collects nothing   5       5             5        5       5
+        #   no         collects nothing   5       5             0 MASK   5       5
+        #
+        # Row 3 and row 4 name the shape "a tracked collection target that
+        # collects nothing", NOT "an empty tests/ directory". Git cannot track
+        # an empty directory: it contributes zero paths to the index and is
+        # ABSENT after clone, so a literal empty tests/ never reaches a runner
+        # and those two rows are unreproducible as they were previously worded
+        # here. The reachable shape is a tests/ that IS tracked and yields no
+        # collected items -- a conftest.py alone, a helper module whose name does
+        # not match python_files, or a suite whose every item is deselected.
+        #
+        # Rows 1, 3 and 4 are refused by requiring BOTH working-tree measures.
+        # Row 2 (no testpaths, suite deleted) is NOT: with no declaration and no
+        # filesystem trace, nothing in the working TREE distinguishes it from a
+        # repo that never had tests. But CI has HISTORY, and the deletion is
+        # recorded there. `git diff --diff-filter=D` over tests/ across the
+        # commits this event introduces reads nonzero on a branch that deletes
+        # its suite and zero on a branch that never had one, so row 2 is closed
+        # HERE and is not a request to whoever adds the next suite.
+        #
+        # That check needs the same event-aware range the commit-authors job
+        # above computes, and for the same reason: on a push to main HEAD *is*
+        # main, so a merge-base range (`main...HEAD`) collapses to EMPTY and the
+        # predicate reads a clean zero over a suite that was genuinely deleted
+        # and landed. Measured both events; the empty-range reading is why the
+        # arm below asserts a nonzero commit count before it is allowed to
+        # interpret a zero, and refuses rather than passing when it cannot.
+        #
+        # KNOWN NARROWING: the history arm looks at tests/ only. A suite that
+        # lived somewhere else AND declared no testpaths is still row 2 and still
+        # invisible -- but such a suite could not have been collected by default
+        # in the first place, so it was never running.
+        run: |
+          set +e
+          uv run --python 3.12 --with pytest pytest -q
+          rc=$?
+          set -e
+          if [ "$rc" -ne 5 ]; then
+            exit "$rc"
+          fi
+          # A collection target that exists on disk refuses exit 5 regardless of
+          # what the manifest declares. -d alone is not enough: an EMPTY tests/
+          # is a target that collects nothing.
+          if [ -d tests ]; then
+            echo "::error::pytest collected no tests (exit 5), but a tests/ directory exists." >&2
+            echo "::error::A collection target is present and collected nothing; treating as failure." >&2
+            exit 1
+          fi
+          # Read the manifest with a TOML parser, not a grep: `testpaths`
+          # appears in comments and in prose above, and a commented-out
+          # setting would arm this gate against a repo that has no suite.
+          # Kept to ONE line on purpose: a column-0 continuation line inside
+          # this block scalar ends the scalar, and the workflow stops parsing
+          # as YAML at all.
+          if uv run --python 3.12 python -c "import sys,tomllib;cfg=tomllib.load(open('pyproject.toml','rb'));sys.exit(0 if cfg.get('tool',{}).get('pytest',{}).get('ini_options',{}).get('testpaths') else 1)"; then
+            echo "::error::pytest collected no tests (exit 5), but pyproject.toml declares testpaths." >&2
+            echo "::error::A suite is configured and did not run; treating as failure, not as an empty repo." >&2
+            exit 1
+          fi
+          # Row 2: no testpaths, nothing under tests/ on disk, and yet a suite
+          # was DELETED by the commits this event introduces. The working tree
+          # cannot tell that from a repo that never had tests. History can, so
+          # ask history. Range selection mirrors the commit-authors job above.
+          if [ -n "${{ github.base_ref }}" ]; then
+            range="origin/${{ github.base_ref }}...HEAD"
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            range="${{ github.sha }}~1..${{ github.sha }}"
+          else
+            range="${{ github.event.before }}..${{ github.sha }}"
+          fi
+          # THREE dots on pull_request so the comparison runs from the MERGE
+          # BASE; two dots would report main's own later additions under tests/
+          # as deletions made by this branch. TWO dots on push, whose endpoints
+          # are exactly what the push moved -- and where three dots would be a
+          # merge base with itself, an EMPTY range that reads as a clean zero
+          # over a suite that really was deleted.
+          nrev=$(git rev-list --count "$range" 2>/dev/null) || nrev=
+          if [ -z "$nrev" ] || [ "$nrev" -eq 0 ]; then
+            echo "::error::pytest collected no tests (exit 5), and the range $range is empty or unresolvable." >&2
+            echo "::error::Without history a deleted suite is indistinguishable from a repo that never had one; refusing to pass." >&2
+            exit 1
+          fi
+          # Capture the paths, then count them. `git diff ... | wc -l` would
+          # discard git's own rc, so a diff that FAILED would read as "deleted
+          # nothing" and hand back the pass this arm exists to withhold.
+          delpaths=$(git diff --diff-filter=D --name-only "$range" -- tests/) || {
+            echo "::error::git diff failed over $range; refusing to pass a run whose history could not be read." >&2
+            exit 1
+          }
+          deleted=$(printf '%s' "$delpaths" | grep -c . || true)
+          if [ "$deleted" -ne 0 ]; then
+            echo "::error::pytest collected no tests (exit 5), but $range deletes $deleted path(s) under tests/." >&2
+            echo "::error::A test suite was removed; treating as failure, not as a repo that never had tests." >&2
+            exit 1
+          fi
+          echo "::warning::pytest collected no tests (exit 5); no tests/ on disk, no testpaths declared, and no test file deleted across $range ($nrev commit(s) scanned). Treating as pass."
+          exit 0
