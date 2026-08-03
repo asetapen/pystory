@@ -1,0 +1,11 @@
+[Unit]
+Description=pystory - local web viewer
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/pystory-web
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

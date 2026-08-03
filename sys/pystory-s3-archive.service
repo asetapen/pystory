@@ -1,0 +1,7 @@
+[Unit]
+Description=pystory - archive old captures to S3
+
+[Service]
+Type=oneshot
+# Edit the --s3-uri below to point at your bucket/prefix before enabling.
+ExecStart=%h/.local/bin/pystory-s3-archive --s3-uri s3://CHANGE-ME/pystory-captures/
