@@ -31,3 +31,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pystory"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
