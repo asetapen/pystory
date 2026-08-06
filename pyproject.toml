@@ -7,7 +7,14 @@ requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Adam Setapen", email = "asetapen@gmail.com" }]
 dependencies = [
-    "opencv-python>=4.10",
+    # Upper bound is load-bearing, not tidiness. opencv-python 5.0 REMOVED
+    # cv2.CascadeClassifier and ships no haarcascade XML files at all
+    # (cv2.data.haarcascades exists but is empty), so capture.py fails at
+    # import on the module-level annotation and detect_face has no cascade to
+    # load. Measured: 5.0.0 -> hasattr(cv2, "CascadeClassifier") is False and
+    # 0 XMLs; 4.14.0 -> True and 17 XMLs including
+    # haarcascade_frontalface_default.xml. ">=4.10" alone resolved to 5.0.
+    "opencv-python>=4.10,<5",
     "mss>=9.0",
     "pillow>=10.0",
     "face_recognition>=1.3",
