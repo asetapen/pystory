@@ -58,7 +58,7 @@ def parse_args() -> Config:
     p.add_argument("--no-screenshot", action="store_true", help="Disable screenshots")
     p.add_argument("--no-webcam", action="store_true", help="Disable webcam capture")
     p.add_argument("--debug-ui", action="store_true", help="Show live preview windows")
-    p.add_argument("--presence-confirm-ticks", type=int,
+    p.add_argument("--presence-confirm-ticks", type=bounded_int(1),
                     help="Consecutive same-result ticks needed before locking/unlocking (default: 2)")
     p.add_argument("--no-camera-failure-lock", action="store_true",
                     help="Do not let a sustained webcam failure lock the desk (restores fail-open)")

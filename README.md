@@ -44,7 +44,7 @@ uv run pystory \
 | `--no-screenshot` | | Disable screenshot capture |
 | `--no-webcam` | | Disable webcam capture |
 | `--debug-ui` | | Show live preview windows (press `q` to quit) |
-| `--presence-confirm-ticks` | `2` | Consecutive same-result ticks needed before locking/unlocking |
+| `--presence-confirm-ticks` | `2` | Consecutive same-result ticks needed before locking/unlocking (minimum `1`; `0` and negatives refused) |
 | `--no-camera-failure-lock` | | Don't let a sustained webcam failure lock the desk (restores fail-open) |
 | `--camera-failure-grace-ticks` | `3` | Frameless ticks tolerated before a camera failure counts against presence |
 | `--lock-overlay` | | Show a fullscreen block overlay in addition to `--no-face-hook` |
@@ -87,7 +87,10 @@ On top of that, `pystory` debounces recognition results with
 `--presence-confirm-ticks` (default 2): a single bad frame (glare, a quick
 look away) won't lock or unlock anything by itself — it takes N consecutive
 same-direction ticks. Raise it if you get spurious locks; lower it (to `1`)
-for instant response.
+for instant response. `1` is the floor and the flag refuses anything below it:
+`0` or a negative used to satisfy the miss comparison before a single frame had
+been looked at, so the desk locked with no evidence and kept locking with your
+face in frame.
 
 ### When the camera itself fails
 

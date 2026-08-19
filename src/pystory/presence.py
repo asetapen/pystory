@@ -25,9 +25,19 @@ class PresenceTracker:
 
     @property
     def should_be_locked(self) -> bool | None:
-        """True: lock now. False: unlock now. None: not enough signal yet."""
-        if self._miss_streak >= self.confirm_ticks:
+        """True: lock now. False: unlock now. None: not enough signal yet.
+
+        A decision needs at least one OBSERVATION behind it, not just a streak
+        that clears `confirm_ticks`. Both streaks start at 0, so with
+        `confirm_ticks <= 0` the miss comparison is satisfied unconditionally:
+        the tracker reported True before `observe` had ever been called, and
+        kept reporting True while a recognised face was in frame, because
+        `observe(True)` resets `_miss_streak` to 0 and `0 >= 0` still holds.
+        That locks the desk on no evidence, which is the one direction this
+        class exists to prevent.
+        """
+        if self._miss_streak > 0 and self._miss_streak >= self.confirm_ticks:
             return True
-        if self._hit_streak >= self.confirm_ticks:
+        if self._hit_streak > 0 and self._hit_streak >= self.confirm_ticks:
             return False
         return None
