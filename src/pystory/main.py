@@ -20,13 +20,37 @@ DEBUG_WINDOW_SCREENSHOT = "pystory - screenshot"
 DEBUG_WINDOW_WEBCAM = "pystory - webcam"
 
 
+def bounded_int(low: int, high: int | None = None):
+    """An argparse `type` that REFUSES an out-of-range value.
+
+    The alternative is letting it reach the field, where it either fails
+    obscurely much later (`--max-dimension 0` raises ZeroDivisionError inside
+    PIL on the first capture) or does silent damage (`--max-history-mb -1`
+    deletes every capture). argparse names the flag and exits 2 for us.
+    """
+
+    def parse(raw: str) -> int:
+        try:
+            value = int(raw)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"expected an integer, got {raw!r}")
+        if value < low or (high is not None and value > high):
+            want = f"{low}-{high}" if high is not None else f"{low} or greater"
+            raise argparse.ArgumentTypeError(f"must be {want}, got {value}")
+        return value
+
+    return parse
+
+
 def parse_args() -> Config:
     p = argparse.ArgumentParser(description="Screenshot + webcam capture with face detection")
     p.add_argument("--storage-dir", type=Path, help="Where to store captures")
-    p.add_argument("--interval", type=int, help="Seconds between captures")
-    p.add_argument("--quality", type=int, help="JPEG quality (1-100)")
-    p.add_argument("--max-dimension", type=int, help="Max image width/height in pixels")
-    p.add_argument("--max-history-mb", type=int, help="Max storage in MB before pruning")
+    p.add_argument("--interval", type=bounded_int(0),
+                    help="Seconds between captures (0 = as fast as possible)")
+    p.add_argument("--quality", type=bounded_int(1, 100), help="JPEG quality (1-100)")
+    p.add_argument("--max-dimension", type=bounded_int(1), help="Max image width/height in pixels")
+    p.add_argument("--max-history-mb", type=bounded_int(0),
+                    help="Max storage in MB before pruning (0 = keep nothing)")
     p.add_argument("--no-face-hook", type=str, help="Command to run when no face detected")
     p.add_argument("--no-face-detection", action="store_true", help="Disable face detection")
     p.add_argument("--no-face-recognition", action="store_true", help="Disable face recognition (detection only)")
@@ -55,13 +79,13 @@ def parse_args() -> Config:
 
     if args.storage_dir:
         config.storage_dir = args.storage_dir
-    if args.interval:
+    if args.interval is not None:
         config.interval_seconds = args.interval
-    if args.quality:
+    if args.quality is not None:
         config.image_quality = args.quality
-    if args.max_dimension:
+    if args.max_dimension is not None:
         config.image_max_dimension = args.max_dimension
-    if args.max_history_mb:
+    if args.max_history_mb is not None:
         config.max_history_mb = args.max_history_mb
     if args.no_face_hook:
         config.no_face_hook = args.no_face_hook
@@ -248,7 +272,11 @@ def main() -> None:
         while True:
             tick(config, state)
             if config.debug_ui:
-                key = cv2.waitKey(config.interval_seconds * 1000)
+                # waitKey treats a delay <= 0 as "wait forever", so passing the
+                # interval straight through would make `--interval 0` mean the
+                # OPPOSITE of what it means on the time.sleep path below. Clamp
+                # to the shortest wait that still pumps the UI event loop.
+                key = cv2.waitKey(max(1, config.interval_seconds * 1000))
                 if key == ord("q"):
                     log.info("Quit requested via debug UI")
                     break

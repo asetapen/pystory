@@ -33,10 +33,10 @@ uv run pystory \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--storage-dir` | `~/.pystory` | Where captures are saved |
-| `--interval` | `5` | Seconds between captures |
-| `--quality` | `50` | JPEG quality (1-100) |
-| `--max-dimension` | `1280` | Max image width or height in pixels |
-| `--max-history-mb` | `500` | Prunes oldest files when exceeded |
+| `--interval` | `5` | Seconds between captures (`0` = as fast as possible; negatives refused) |
+| `--quality` | `50` | JPEG quality, `1`-`100` (outside that range is refused) |
+| `--max-dimension` | `1280` | Max image width or height in pixels (`1` or greater; `0` is refused) |
+| `--max-history-mb` | `500` | Prunes oldest files when exceeded (`0` = keep nothing; negatives refused) |
 | `--no-face-hook` | `loginctl lock-session` | Command to run when no face is detected |
 | `--no-face-detection` | | Disable face detection entirely |
 | `--no-face-recognition` | | Use detection only (any face prevents locking) |
