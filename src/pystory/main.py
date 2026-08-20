@@ -42,6 +42,27 @@ def bounded_int(low: int, high: int | None = None):
     return parse
 
 
+def non_empty(what: str):
+    """An argparse `type` that REFUSES the empty string.
+
+    For a flag whose value cannot work when empty: Tk raises on an empty keysym,
+    so an empty panic hotkey would leave the overlay with no escape, and an empty
+    command name cannot exec. The alternative is what `if args.x:` used to do --
+    drop the value, keep the default, log nothing -- so argparse names the flag
+    and exits 2 for us, exactly as `bounded_int` does for a number.
+
+    Not used for `--no-face-hook`: an empty hook is a working no-op (`sh -c ""`
+    exits 0), which is a legitimate request and must reach the field instead.
+    """
+
+    def parse(raw: str) -> str:
+        if not raw:
+            raise argparse.ArgumentTypeError(f"expected {what}, got an empty string")
+        return raw
+
+    return parse
+
+
 def parse_args() -> Config:
     p = argparse.ArgumentParser(description="Screenshot + webcam capture with face detection")
     p.add_argument("--storage-dir", type=Path, help="Where to store captures")
@@ -51,7 +72,8 @@ def parse_args() -> Config:
     p.add_argument("--max-dimension", type=bounded_int(1), help="Max image width/height in pixels")
     p.add_argument("--max-history-mb", type=bounded_int(0),
                     help="Max storage in MB before pruning (0 = keep nothing)")
-    p.add_argument("--no-face-hook", type=str, help="Command to run when no face detected")
+    p.add_argument("--no-face-hook", type=str,
+                    help="Command to run when no face detected (empty string = run nothing)")
     p.add_argument("--no-face-detection", action="store_true", help="Disable face detection")
     p.add_argument("--no-face-recognition", action="store_true", help="Disable face recognition (detection only)")
     p.add_argument("--face-tolerance", type=float, help="Face match tolerance (lower = stricter, default: 0.6)")
@@ -62,22 +84,28 @@ def parse_args() -> Config:
                     help="Consecutive same-result ticks needed before locking/unlocking (default: 2)")
     p.add_argument("--no-camera-failure-lock", action="store_true",
                     help="Do not let a sustained webcam failure lock the desk (restores fail-open)")
-    p.add_argument("--camera-failure-grace-ticks", type=int,
+    p.add_argument("--camera-failure-grace-ticks", type=bounded_int(0),
                     help="Consecutive frameless ticks tolerated before a camera failure "
-                         "counts against presence (default: 3)")
+                         "counts against presence (0 = none, default: 3)")
     p.add_argument("--lock-overlay", action="store_true",
                     help="Show a fullscreen block overlay instead of/alongside --no-face-hook")
     p.add_argument("--lock-passphrase", type=str, help="Passphrase that dismisses the lock overlay")
-    p.add_argument("--lock-panic-hotkey", type=str,
+    p.add_argument("--lock-panic-hotkey", type=non_empty("a Tk keysym"),
                     help="Tk keysym that force-dismisses the overlay (default: <Control-Alt-Escape>)")
     p.add_argument("--obsbot-tracking", action="store_true",
                     help="Enable/disable OBSBOT AI tracking based on presence")
-    p.add_argument("--obsbot-cli-path", type=str, help="Path to obsbot-cli (default: obsbot-cli on PATH)")
+    p.add_argument("--obsbot-cli-path", type=non_empty("a path or command name"),
+                    help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
     args = p.parse_args()
     config = Config()
 
-    if args.storage_dir:
+    # Every flag that carries a VALUE is gated on `is not None`, never on
+    # truthiness: `if args.x:` cannot tell "not passed" from "passed a falsy
+    # value", and it silently applies the default for both. The `store_true`
+    # flags below are the exception, and gating those on truthiness is correct --
+    # for them False IS absence.
+    if args.storage_dir is not None:
         config.storage_dir = args.storage_dir
     if args.interval is not None:
         config.interval_seconds = args.interval
@@ -87,7 +115,7 @@ def parse_args() -> Config:
         config.image_max_dimension = args.max_dimension
     if args.max_history_mb is not None:
         config.max_history_mb = args.max_history_mb
-    if args.no_face_hook:
+    if args.no_face_hook is not None:
         config.no_face_hook = args.no_face_hook
     if args.no_face_detection:
         config.face_detection_enabled = False
@@ -109,13 +137,13 @@ def parse_args() -> Config:
         config.camera_failure_grace_ticks = args.camera_failure_grace_ticks
     if args.lock_overlay:
         config.lock_overlay_enabled = True
-    if args.lock_passphrase:
+    if args.lock_passphrase is not None:
         config.lock_passphrase = args.lock_passphrase
-    if args.lock_panic_hotkey:
+    if args.lock_panic_hotkey is not None:
         config.lock_panic_hotkey = args.lock_panic_hotkey
     if args.obsbot_tracking:
         config.obsbot_tracking_enabled = True
-    if args.obsbot_cli_path:
+    if args.obsbot_cli_path is not None:
         config.obsbot_cli_path = args.obsbot_cli_path
 
     return config

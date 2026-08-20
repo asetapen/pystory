@@ -37,7 +37,7 @@ uv run pystory \
 | `--quality` | `50` | JPEG quality, `1`-`100` (outside that range is refused) |
 | `--max-dimension` | `1280` | Max image width or height in pixels (`1` or greater; `0` is refused) |
 | `--max-history-mb` | `500` | Prunes oldest files when exceeded (`0` = keep nothing; negatives refused) |
-| `--no-face-hook` | `loginctl lock-session` | Command to run when no face is detected |
+| `--no-face-hook` | `loginctl lock-session` | Command to run when no face is detected (pass `""` to run nothing) |
 | `--no-face-detection` | | Disable face detection entirely |
 | `--no-face-recognition` | | Use detection only (any face prevents locking) |
 | `--face-tolerance` | `0.6` | Face match tolerance (lower = stricter) |
@@ -46,12 +46,12 @@ uv run pystory \
 | `--debug-ui` | | Show live preview windows (press `q` to quit) |
 | `--presence-confirm-ticks` | `2` | Consecutive same-result ticks needed before locking/unlocking (minimum `1`; `0` and negatives refused) |
 | `--no-camera-failure-lock` | | Don't let a sustained webcam failure lock the desk (restores fail-open) |
-| `--camera-failure-grace-ticks` | `3` | Frameless ticks tolerated before a camera failure counts against presence |
+| `--camera-failure-grace-ticks` | `3` | Frameless ticks tolerated before a camera failure counts against presence (`0` = none; negatives refused) |
 | `--lock-overlay` | | Show a fullscreen block overlay in addition to `--no-face-hook` |
 | `--lock-passphrase` | | Passphrase that dismisses the lock overlay |
-| `--lock-panic-hotkey` | `<Control-Alt-Escape>` | Tk keysym that force-dismisses the overlay |
+| `--lock-panic-hotkey` | `<Control-Alt-Escape>` | Tk keysym that force-dismisses the overlay (empty is refused: an empty keysym cannot bind) |
 | `--obsbot-tracking` | | Enable/disable OBSBOT AI person-tracking based on presence |
-| `--obsbot-cli-path` | `obsbot-cli` | Path to the `obsbot-cli` binary |
+| `--obsbot-cli-path` | `obsbot-cli` | Path to the `obsbot-cli` binary (empty is refused: it cannot exec) |
 
 ## Face Recognition
 
