@@ -229,13 +229,32 @@ def tick(config: Config, state: AppState) -> None:
             state.camera_failure_streak = 0
             if config.face_recognition_enabled:
                 result = is_recognized(webcam_frame, config)
-                recognized = result is True
-                if result is None:
-                    log.info("No face detected")
-                elif result is False:
-                    log.info("Face detected but not recognized")
+                if result is None and not load_encodings(config):
+                    # `None` covers TWO states and only one of them is a reason to
+                    # fall back: "no face in the frame", and "nobody is enrolled,
+                    # so the frame was never examined". Treating both as a MISS is
+                    # what locked a fresh install on the second tick, with no way
+                    # back: the no-enrollment None is returned before the frame is
+                    # looked at, so nothing the user did could clear it.
+                    #
+                    # Asked here rather than inside `is_recognized` so the value a
+                    # caller (or a test double) sees keeps its meaning, and asked
+                    # only on the None path, so an enrolled install never pays the
+                    # extra read while a face is in frame.
+                    #
+                    # Per tick, not once at startup: `pystory-enroll` writes the
+                    # encodings file while this loop is running, so a startup check
+                    # would keep a just-enrolled user in detection-only mode --
+                    # where ANY face prevents locking -- until they restarted.
+                    recognized = detect_face(webcam_frame)
                 else:
-                    log.debug("Face recognized")
+                    recognized = result is True
+                    if result is None:
+                        log.info("No face detected")
+                    elif result is False:
+                        log.info("Face detected but not recognized")
+                    else:
+                        log.debug("Face recognized")
             else:
                 recognized = detect_face(webcam_frame)
 
