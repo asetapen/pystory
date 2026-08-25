@@ -42,6 +42,20 @@ def bounded_int(low: int, high: int | None = None):
     return parse
 
 
+def camera_device(raw: str) -> int | str:
+    """An argparse `type` for a camera identifier: an index or a device path.
+
+    cv2.VideoCapture accepts either an integer index (0, 1, ...) or a device
+    path (e.g. /dev/video2). Coercing a path through int() would raise, so
+    only a numeric-looking value becomes an int; anything else passes through
+    unchanged as the device path.
+    """
+    try:
+        return int(raw)
+    except ValueError:
+        return raw
+
+
 def non_empty(what: str):
     """An argparse `type` that REFUSES the empty string.
 
@@ -79,6 +93,8 @@ def parse_args() -> Config:
     p.add_argument("--face-tolerance", type=float, help="Face match tolerance (lower = stricter, default: 0.6)")
     p.add_argument("--no-screenshot", action="store_true", help="Disable screenshots")
     p.add_argument("--no-webcam", action="store_true", help="Disable webcam capture")
+    p.add_argument("--webcam-device", type=camera_device,
+                    help="Camera to use: an index (0, 1, ...) or a device path like /dev/video2 (default: 0)")
     p.add_argument("--debug-ui", action="store_true", help="Show live preview windows")
     p.add_argument("--presence-confirm-ticks", type=bounded_int(1),
                     help="Consecutive same-result ticks needed before locking/unlocking (default: 2)")
@@ -127,6 +143,8 @@ def parse_args() -> Config:
         config.screenshot_enabled = False
     if args.no_webcam:
         config.webcam_enabled = False
+    if args.webcam_device is not None:
+        config.webcam_device = args.webcam_device
     if args.debug_ui:
         config.debug_ui = True
     if args.presence_confirm_ticks is not None:

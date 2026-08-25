@@ -35,7 +35,7 @@ def take_screenshot(timestamp: str, config: Config) -> tuple[Path, np.ndarray]:
 
 
 def take_webcam_picture(timestamp: str, config: Config) -> tuple[Path | None, np.ndarray | None]:
-    cam = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture(config.webcam_device)
     try:
         ret, frame = cam.read()
         if not ret:

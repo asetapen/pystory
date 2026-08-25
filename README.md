@@ -43,6 +43,7 @@ uv run pystory \
 | `--face-tolerance` | `0.6` | Face match tolerance (lower = stricter) |
 | `--no-screenshot` | | Disable screenshot capture |
 | `--no-webcam` | | Disable webcam capture |
+| `--webcam-device` | `0` | Camera to use: an index (`0`, `1`, ...) or a device path like `/dev/video2` |
 | `--debug-ui` | | Show live preview windows (press `q` to quit) |
 | `--presence-confirm-ticks` | `2` | Consecutive same-result ticks needed before locking/unlocking (minimum `1`; `0` and negatives refused) |
 | `--no-camera-failure-lock` | | Don't let a sustained webcam failure lock the desk (restores fail-open) |
@@ -66,7 +67,17 @@ uv run pystory-enroll --samples 10
 
 # re-enroll from scratch
 uv run pystory-enroll --reset
+
+# use a specific camera (e.g. an external OBSBOT, not the laptop's built-in)
+uv run pystory-enroll --webcam-device /dev/video2
 ```
+
+If more than one camera is attached, `--webcam-device` (also accepted by
+`pystory` itself) picks which one opens: an index (`0`, `1`, ...) as the OS
+enumerates video devices, or a device path (`/dev/video2`). List what's
+available with `v4l2-ctl --list-devices` or `ls /dev/video*`. The default
+(`0`) is whichever camera the OS enumerates first, which on a laptop with an
+external camera attached is usually the built-in one, not the external one.
 
 Once enrolled, pystory will lock the screen if it sees no face *or* an unrecognized face. If no faces are enrolled, it falls back to detection-only mode (any face prevents locking).
 
