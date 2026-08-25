@@ -17,6 +17,12 @@ class Config:
     webcam_enabled: bool = True
     debug_ui: bool = False
 
+    # Which camera cv2.VideoCapture opens: an integer index (0, 1, ...) as
+    # the OS enumerates video devices, or a device path (e.g. /dev/video2).
+    # Defaults to 0, which on a laptop with an external camera attached is
+    # usually the built-in camera, not the external one.
+    webcam_device: int | str = 0
+
     # Presence debouncing: consecutive same-direction ticks needed before
     # acting on a lock/unlock decision.
     presence_confirm_ticks: int = 2
