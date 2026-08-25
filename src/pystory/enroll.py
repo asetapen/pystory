@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 
 from pystory.config import Config
+from pystory.main import bounded_int
 from pystory.recognition import encode_face, load_encodings, save_encodings
 
 log = logging.getLogger("pystory.enroll")
@@ -22,14 +23,19 @@ POSE_PROMPTS = [
 ]
 
 
-def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5) -> int:
+def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5, reset: bool = False) -> int:
     """Auto-capture face samples from the webcam and enroll them.
 
     Cycles through pose prompts and automatically grabs a sample every
     `auto_delay` seconds once a face is detected, instead of relying on
     manual keypresses. Returns number of new encodings added.
+
+    `reset` replaces the existing enrollment with the newly captured set
+    instead of appending to it -- and only once capture actually produces
+    at least one sample, so a cancelled or failed capture leaves the
+    previous enrollment untouched rather than wiping it up front.
     """
-    existing = load_encodings(config)
+    existing = [] if reset else load_encodings(config)
     new_encodings: list = []
 
     cam = cv2.VideoCapture(0)
@@ -82,9 +88,21 @@ def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5
     if new_encodings:
         all_encodings = existing + new_encodings
         save_encodings(all_encodings, config)
-        print(f"Enrolled {len(new_encodings)} new sample(s) ({len(all_encodings)} total).")
+        if reset:
+            print(f"Cleared previous enrollment. Enrolled {len(new_encodings)} new sample(s).")
+        else:
+            print(f"Enrolled {len(new_encodings)} new sample(s) ({len(all_encodings)} total).")
 
     return len(new_encodings)
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Enroll your face for pystory recognition")
+    p.add_argument("--storage-dir", type=Path, help="Where pystory data is stored")
+    p.add_argument("--samples", type=bounded_int(1), default=8, help="Number of face samples to capture (default: 8)")
+    p.add_argument("--delay", type=float, default=1.5, help="Seconds between auto-captures (default: 1.5)")
+    p.add_argument("--reset", action="store_true", help="Clear all enrolled faces before enrolling")
+    return p.parse_args()
 
 
 def main() -> None:
@@ -93,26 +111,14 @@ def main() -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
-    p = argparse.ArgumentParser(description="Enroll your face for pystory recognition")
-    p.add_argument("--storage-dir", type=Path, help="Where pystory data is stored")
-    p.add_argument("--samples", type=int, default=8, help="Number of face samples to capture (default: 8)")
-    p.add_argument("--delay", type=float, default=1.5, help="Seconds between auto-captures (default: 1.5)")
-    p.add_argument("--reset", action="store_true", help="Clear all enrolled faces before enrolling")
-    args = p.parse_args()
+    args = parse_args()
 
     config = Config()
     if args.storage_dir:
         config.storage_dir = args.storage_dir
     config.storage_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.reset:
-        from pystory.recognition import encodings_path
-        path = encodings_path(config)
-        if path.exists():
-            path.unlink()
-            print("Cleared all enrolled faces.")
-
-    capture_and_enroll(config, args.samples, args.delay)
+    capture_and_enroll(config, args.samples, args.delay, reset=args.reset)
 
 
 if __name__ == "__main__":
