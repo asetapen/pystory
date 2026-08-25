@@ -34,7 +34,12 @@ def save_encodings(encodings: list[np.ndarray], config: Config) -> None:
 
 def encode_face(frame: np.ndarray) -> np.ndarray | None:
     """Extract a face encoding from a BGR frame. Returns None if no face found."""
-    rgb = frame[:, :, ::-1]  # BGR to RGB
+    # ::-1 reverses the channel axis by making its stride negative rather than
+    # copying, so the result is a non-contiguous view. dlib's pybind11 binding
+    # requires a C-contiguous buffer and rejects that view with a confusing
+    # "incompatible function arguments" TypeError that looks like a signature
+    # mismatch rather than a memory-layout one.
+    rgb = np.ascontiguousarray(frame[:, :, ::-1])  # BGR to RGB
     encodings = face_recognition.face_encodings(rgb)
     if not encodings:
         return None
@@ -52,7 +57,7 @@ def is_recognized(frame: np.ndarray, config: Config) -> bool | None:
         log.warning("No enrolled faces found — falling back to detection only")
         return None
 
-    rgb = frame[:, :, ::-1]
+    rgb = np.ascontiguousarray(frame[:, :, ::-1])
     unknown_encodings = face_recognition.face_encodings(rgb)
     if not unknown_encodings:
         return None
