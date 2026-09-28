@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Refuse a commit that would not be authored by Adam. Local feedback only;
+# the commit-authors CI job is the enforcement.
+#
+# Opt in once per clone:   git config core.hooksPath .githooks
+exec "$(git rev-parse --show-toplevel)/sys/check-commit-authors.sh" --identity
