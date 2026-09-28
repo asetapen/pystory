@@ -1,8 +1,8 @@
-"""`pystory-enroll --reset` must not delete before it captures (issue st-8313af).
+"""`pystory-enroll --reset` must not delete before it captures.
 
 `main()` used to unlink the encodings file and only THEN call
 `capture_and_enroll`, so a dead camera, an ESC, or `--samples 0` left the file
-deleted at exit 0 with no error -- and post-st-5ca1n6, an empty enrollment set
+deleted at exit 0 with no error -- and since the no-enrollment fallback, an empty enrollment set
 makes `main.tick` fall back to detecting ANY face, so a wiped enrollment is now
 a silent security downgrade rather than the loud lockout it used to be.
 

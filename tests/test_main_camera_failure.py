@@ -1,4 +1,4 @@
-"""Regression tests for the camera-failure fail-open (issue st-xa1v6h).
+"""Regression tests for the camera-failure fail-open.
 
 Before the fix, `tick()` gated the ENTIRE lock decision on
 `webcam_frame is not None`, so a webcam returning no frame meant recognition

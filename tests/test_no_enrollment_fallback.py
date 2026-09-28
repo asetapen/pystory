@@ -1,4 +1,4 @@
-"""With nobody enrolled, recognition must fall back to detection (issue st-5ca1n6).
+"""With nobody enrolled, recognition must fall back to detection.
 
 `recognition.is_recognized` returns `None` for TWO different states:
 

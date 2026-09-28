@@ -1,4 +1,4 @@
-"""Numeric CLI flags must not silently swallow a value (issue st-dqfz5j).
+"""Numeric CLI flags must not silently swallow a value.
 
 Four numeric flags were gated with `if args.x:`, a TRUTHINESS test, so `0` took
 the same branch as omitting the flag entirely and the hardcoded default was

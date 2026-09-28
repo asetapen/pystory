@@ -1,4 +1,4 @@
-"""A lock decision needs an observation behind it (issue st-f456h5).
+"""A lock decision needs an observation behind it.
 
 `should_be_locked` compared both streaks against `confirm_ticks` with no
 requirement that anything had been observed. Both streaks start at 0, so any
@@ -126,7 +126,7 @@ def test_default_debouncing_is_unchanged():
 @pytest.mark.parametrize("value", ["0", "-1"])
 def test_below_the_floor_is_refused_by_name(monkeypatch, capsys, value):
     """Refused at exit 2 naming the flag AND the value, matching what landed for
-    the four numeric flags in st-dqfz5j. Naming both is load-bearing: a bare
+    the four numeric flags in tests/test_main_args_zero.py. Naming both is load-bearing: a bare
     "invalid value" refusal is indistinguishable from an unrecognised flag."""
     with pytest.raises(SystemExit) as exit_info:
         parse(monkeypatch, ["--presence-confirm-ticks", value])

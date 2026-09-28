@@ -1,7 +1,7 @@
-"""String CLI flags must not silently swallow an empty value (issue st-gbjpsc).
+"""String CLI flags must not silently swallow an empty value.
 
-`tests/test_main_args_zero.py` fixed this class for the four NUMERIC flags
-(st-dqfz5j): they were gated with `if args.x:`, a TRUTHINESS test, so the one
+`tests/test_main_args_zero.py` fixed this class for the four NUMERIC flags:
+they were gated with `if args.x:`, a TRUTHINESS test, so the one
 falsy value took the same branch as omitting the flag. The string flags were left
 on the same gate, and one of them has a falsy value that WORKS:
 
@@ -29,7 +29,7 @@ judgement, recorded in the tables below rather than left implicit:
     panic hotkey only) and is deliberately NOT bound below -- see the comment on
     NOT_DISCRIMINATING.
   * `--camera-failure-grace-ticks` is numeric and was the ONE numeric flag left
-    on plain `type=int` after st-dqfz5j, so a negative reached the field. Bound
+    on plain `type=int` after the numeric fix, so a negative reached the field. Bound
     here rather than in the zero file because it is the same omission.
 
 The last section drives the real `main.tick` end to end, because a parse-level

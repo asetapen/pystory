@@ -1,4 +1,4 @@
-"""`--interval 0` must not park the debug UI forever (issue st-dqfz5j).
+"""`--interval 0` must not park the debug UI forever.
 
 `cv2.waitKey`'s documented contract is that a delay <= 0 waits INFINITELY, so
 `main()`'s debug-UI branch passing `interval_seconds * 1000` straight through
