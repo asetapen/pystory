@@ -40,6 +40,9 @@ systemctl --user enable --now pystory
 # Tests
 uv sync --group dev
 uv run pytest
+
+# Refuse commits not authored by Adam, locally (CI enforces it regardless)
+git config core.hooksPath .githooks
 ```
 
 ## Architecture

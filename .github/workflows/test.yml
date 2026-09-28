@@ -18,25 +18,15 @@ jobs:
           fetch-depth: 0
 
       - name: Every commit authored by Adam
-        # On pull_request, scan the PR's commits: base_ref..HEAD. On a push to
-        # main, HEAD *is* origin/main, so that same range is empty and the job
-        # would be a permanent silent no-op on exactly the branch that matters;
-        # use before..after there instead. github.event.before is all-zeroes on
-        # a branch's first push, which resolves to nothing, so fall back to the
-        # single commit rather than letting the script exit 2 on a valid event.
-        # KNOWN NARROWING: that fallback inspects only the tip, so a bad author
-        # deeper in a first push is not caught. It is the pull_request arm that
-        # actually gates merges here, and that one scans the whole PR.
+        # The range is computed by the SCRIPT (see its --event-range arm), so
+        # it is covered by tests/test_check_commit_authors.py rather than living
+        # only here. --require-commits turns a range that resolves but scans
+        # zero commits into a refusal (exit 3) instead of a pass.
         run: |
-          if [ -n "${{ github.base_ref }}" ]; then
-            range="origin/${{ github.base_ref }}..HEAD"
-          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            range="${{ github.sha }}~1..${{ github.sha }}"
-          else
-            range="${{ github.event.before }}..${{ github.sha }}"
-          fi
-          echo "Scanning $range"
-          ./sys/check-commit-authors.sh "$range"
+          range="$(./sys/check-commit-authors.sh --event-range \
+            "${{ github.base_ref }}" "${{ github.event.before }}" "${{ github.sha }}")"
+          echo "Scanning ${range}"
+          ./sys/check-commit-authors.sh --require-commits "${range}"
 
   pytest:
     runs-on: ubuntu-24.04
