@@ -54,7 +54,7 @@ def test_build_timelapse_writes_video_with_explicit_resolution(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# THE DEFECT (issue st-8gpxr8, D1): a writer that could not open must not be
+# THE DEFECT (D1): a writer that could not open must not be
 # reported as a success. `build_timelapse` never checked
 # `VideoWriter.isOpened()`, so it logged "Wrote <path> ..." and returned
 # normally even when no file existed at all.

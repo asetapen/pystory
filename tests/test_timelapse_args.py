@@ -1,5 +1,5 @@
-"""`--output` must not be silently dropped on the default `--type both` (issue
-st-8gpxr8, D2), and `--fps` must not reach 0 (D1's other trigger).
+"""`--output` must not be silently dropped on the default `--type both`
+(D2), and `--fps` must not reach 0 (D1's other trigger).
 
 `main.py` line 73 read `if args.output and args.type != "both"`, and `--type`
 defaults to `"both"`, so `pystory-timelapse --output x.mp4` -- the plainest
