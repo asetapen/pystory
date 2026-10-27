@@ -1,9 +1,10 @@
 import argparse
 import logging
+import queue
 import signal
 import subprocess
 import sys
-import time
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -11,7 +12,7 @@ import cv2
 
 from pystory.capture import take_screenshot, take_webcam_picture, detect_face, resolve_webcam_device
 from pystory.config import Config
-from pystory.obsbot import disable_tracking, enable_tracking
+from pystory.obsbot import disable_tracking, disable_tracking_in_background, enable_tracking
 from pystory.presence import PresenceTracker
 from pystory.recognition import is_recognized, load_encodings
 from pystory.storage import prune_old_files
@@ -20,6 +21,8 @@ log = logging.getLogger("pystory")
 
 DEBUG_WINDOW_SCREENSHOT = "pystory - screenshot"
 DEBUG_WINDOW_WEBCAM = "pystory - webcam"
+# How often the main thread wakes to notice Ctrl-C and pump the debug UI.
+MAIN_THREAD_POLL_SECONDS = 0.05
 
 
 def bounded_int(low: int, high: int | None = None):
@@ -79,7 +82,7 @@ def non_empty(what: str):
     return parse
 
 
-def parse_args() -> Config:
+def parse_args(argv: list[str] | None = None) -> Config:
     p = argparse.ArgumentParser(description="Screenshot + webcam capture with face detection")
     p.add_argument("--storage-dir", type=Path, help="Where to store captures")
     p.add_argument("--interval", type=bounded_int(0),
@@ -120,7 +123,7 @@ def parse_args() -> Config:
     p.add_argument("--obsbot-cli-path", type=non_empty("a path or command name"),
                     help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
-    args = p.parse_args()
+    args = p.parse_args(argv)
     config = Config()
 
     # Every flag that carries a VALUE is gated on `is not None`, never on
@@ -205,6 +208,10 @@ class AppState:
         # Consecutive ticks the webcam has returned no usable frame. Reset by
         # any successful capture; see camera_failure_grace_ticks.
         self.camera_failure_streak = 0
+        # (window title, frame) pairs for the debug UI. tick() runs on the
+        # capture thread and OpenCV's Qt GUI must stay on the main thread, so
+        # frames are handed over here instead of shown from tick().
+        self.debug_frames: queue.Queue = queue.Queue()
 
 
 def apply_presence(config: Config, state: AppState, recognized: bool) -> None:
@@ -317,9 +324,9 @@ def tick(config: Config, state: AppState) -> None:
 
     if config.debug_ui:
         if screenshot_frame is not None:
-            show_debug(DEBUG_WINDOW_SCREENSHOT, screenshot_frame)
+            state.debug_frames.put((DEBUG_WINDOW_SCREENSHOT, screenshot_frame))
         if webcam_frame is not None:
-            show_debug(DEBUG_WINDOW_WEBCAM, webcam_frame)
+            state.debug_frames.put((DEBUG_WINDOW_WEBCAM, webcam_frame))
 
     pruned = prune_old_files(config)
     if pruned:
@@ -355,28 +362,82 @@ def main() -> None:
     # process without running the `finally` below, leaving tracking on.
     signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
 
-    if config.obsbot_tracking_on_run:
-        enable_tracking(config)
+    stop = threading.Event()
+    errors: list[BaseException] = []
+    interrupted = False
     try:
-        while True:
-            tick(config, state)
-            if config.debug_ui:
-                # waitKey treats a delay <= 0 as "wait forever", so passing the
-                # interval straight through would make `--interval 0` mean the
-                # OPPOSITE of what it means on the time.sleep path below. Clamp
-                # to the shortest wait that still pumps the UI event loop.
-                key = cv2.waitKey(max(1, config.interval_seconds * 1000))
-                if key == ord("q"):
-                    log.info("Quit requested via debug UI")
-                    break
-            else:
-                time.sleep(config.interval_seconds)
-    finally:
         if config.obsbot_tracking_on_run:
-            disable_tracking(config)
+            enable_tracking(config)
+        worker = threading.Thread(
+            target=capture_loop, args=(config, state, stop, errors),
+            name="pystory-capture", daemon=True,
+        )
+        worker.start()
+        if config.debug_ui:
+            pump_debug_ui(state, stop)
+        else:
+            # Woken often so Ctrl-C lands within one poll, whatever the
+            # capture thread is in the middle of.
+            while not stop.wait(MAIN_THREAD_POLL_SECONDS):
+                pass
+        if errors:
+            raise errors[0]
+    except KeyboardInterrupt:
+        interrupted = True
+        log.info("Interrupted, exiting")
+    finally:
+        stop.set()
+        if config.obsbot_tracking_on_run:
+            if interrupted:
+                disable_tracking_in_background(config)
+            else:
+                disable_tracking(config)
         if config.debug_ui:
             cv2.destroyAllWindows()
+    if interrupted:
+        sys.exit(130)
 
+
+def capture_loop(config: Config, state: AppState, stop: threading.Event,
+                 errors: list[BaseException]) -> None:
+    """The tick loop, run on its own daemon thread.
+
+    A daemon so that exiting never waits for a tick stuck in a camera read or
+    face recognition. Any exception is handed to the main thread, which
+    re-raises it: a capture thread that died quietly would leave pystory
+    running and never locking.
+    """
+    try:
+        while not stop.is_set():
+            tick(config, state)
+            if stop.wait(config.interval_seconds):
+                break
+    except BaseException as e:
+        errors.append(e)
+    finally:
+        stop.set()
+
+
+def pump_debug_ui(state: AppState, stop: threading.Event) -> None:
+    """Show frames from the capture thread and watch for `q`, on the main thread."""
+    shown = False
+    poll_ms = max(1, int(MAIN_THREAD_POLL_SECONDS * 1000))
+    while not stop.is_set():
+        try:
+            while True:
+                title, frame = state.debug_frames.get_nowait()
+                show_debug(title, frame)
+                shown = True
+        except queue.Empty:
+            pass
+        if not shown:
+            # waitKey returns at once while no window exists, so it cannot
+            # pace this loop until the first frame is up.
+            stop.wait(MAIN_THREAD_POLL_SECONDS)
+            continue
+        if cv2.waitKey(poll_ms) == ord("q"):
+            log.info("Quit requested via debug UI")
+            stop.set()
 
 if __name__ == "__main__":
     main()

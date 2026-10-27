@@ -47,8 +47,13 @@ def test_up_starts_the_capture_loop_in_the_background(started, tmp_path):
     assert b"pystory.main" in Path(f"/proc/{started}/cmdline").read_bytes()
     # Detached: its own session, so closing the terminal does not kill it.
     assert os.getsid(started) == started
-    time.sleep(1.5)
-    assert "Starting pystory" in (tmp_path / "pystory.log").read_text()
+    # Polled rather than a fixed sleep: the child's imports alone can take
+    # over a second on a loaded machine.
+    log = tmp_path / "pystory.log"
+    deadline = time.monotonic() + 15
+    while "Starting pystory" not in log.read_text() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert "Starting pystory" in log.read_text()
 
 
 def test_down_stops_it_and_removes_the_pid_file(monkeypatch, started, tmp_path):
@@ -69,12 +74,26 @@ def test_up_twice_does_not_start_a_second_copy(monkeypatch, started, tmp_path, c
     assert "already running" in capsys.readouterr().out
 
 
-def test_up_reports_a_child_that_dies_at_startup(monkeypatch, tmp_path):
+def test_up_rejects_bad_flags_before_starting_anything(monkeypatch, tmp_path, capsys):
     rc = run(monkeypatch, "up", "--storage-dir", str(tmp_path), "--interval", "-1")
 
     assert rc == 1
     assert not (tmp_path / "pystory.pid").exists()
-    assert "--interval" in (tmp_path / "pystory.log").read_text()
+    assert not (tmp_path / "pystory.log").exists(), "a child was started"
+    assert "--interval" in capsys.readouterr().err
+
+
+def test_up_reports_a_child_that_dies_at_startup(monkeypatch, tmp_path):
+    """Flags that parse but kill the child at once must still be reported.
+    The child here is `python -c` exiting immediately, so the 1 s startup
+    window is not raced against pystory's import time."""
+    monkeypatch.setattr(service, "child_argv",
+                        lambda flags: [sys.executable, "-c", "import sys; print('boom'); sys.exit(3)"])
+    rc = run(monkeypatch, "up", "--storage-dir", str(tmp_path))
+
+    assert rc == 1
+    assert not (tmp_path / "pystory.pid").exists()
+    assert "boom" in (tmp_path / "pystory.log").read_text()
 
 
 def test_down_does_not_signal_a_reused_pid(monkeypatch, tmp_path, capsys):

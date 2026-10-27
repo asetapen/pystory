@@ -182,7 +182,9 @@ uv run pystory --obsbot-tracking --obsbot-cli-path ~/.local/bin/obsbot-cli
 Separately, and on by default, pystory turns AI tracking on when it starts
 and off when it exits (Ctrl-C, `pystory down`, or a systemd stop). Pass
 `--no-obsbot-tracking-on-run` to leave the camera alone. With no OBSBOT
-attached this just logs a warning.
+attached this just logs a warning. Ctrl-C exits at once and leaves
+`obsbot-cli` turning tracking off in the background for a few seconds;
+`pystory down` and a systemd stop wait for it.
 
 Tracking mode/sub-mode are configurable via `Config.obsbot_ai_mode` /
 `obsbot_ai_sub_mode` (defaults: Single Human Tracking, Upper Body). This
