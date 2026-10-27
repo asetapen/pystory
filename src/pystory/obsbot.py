@@ -10,6 +10,10 @@ log = logging.getLogger("pystory.obsbot")
 # outright. See obsbot-camera-control's src/cli/meet2_test.cpp runInteractiveMode.
 _ENABLE_SCRIPT = "i\n{ai_mode}\nq\n"
 _DISABLE_SCRIPT = "I\nq\n"
+# AI off first so tracking cannot steer the gimbal while it recentres, then
+# '9' centres pan/tilt and '4' zooms out. obsbot-cli tracks zoom from 1.0 in
+# each session and clamps zoom-out at 1.0, so one '4' always sets 1x.
+_NEUTRAL_COMMANDS = "I\n9\n4\n"
 
 
 def _run_cli(config: Config, script: str) -> bool:
@@ -37,10 +41,19 @@ def _run_cli(config: Config, script: str) -> bool:
     return True
 
 
-def enable_tracking(config: Config) -> bool:
-    """Enable AI person-tracking (pan/tilt/zoom follow) on the OBSBOT camera."""
-    ok = _run_cli(config, _ENABLE_SCRIPT.format(ai_mode=config.obsbot_ai_mode))
+def enable_tracking(config: Config, neutral_first: bool = False) -> bool:
+    """Enable AI person-tracking (pan/tilt/zoom follow) on the OBSBOT camera.
+
+    With `neutral_first`, recentre and zoom out before enabling it, in the
+    same obsbot-cli session: connecting alone takes several seconds.
+    """
+    script = _ENABLE_SCRIPT.format(ai_mode=config.obsbot_ai_mode)
+    if neutral_first:
+        script = _NEUTRAL_COMMANDS + script
+    ok = _run_cli(config, script)
     if ok:
+        if neutral_first:
+            log.info("OBSBOT centred and zoomed out")
         log.info("OBSBOT tracking enabled (ai_mode=%d)", config.obsbot_ai_mode)
     return ok
 

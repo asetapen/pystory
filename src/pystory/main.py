@@ -120,6 +120,8 @@ def parse_args(argv: list[str] | None = None) -> Config:
                     help="Enable/disable OBSBOT AI tracking based on presence")
     p.add_argument("--no-obsbot-tracking-on-run", action="store_true",
                     help="Do not turn OBSBOT AI tracking on at startup and off at exit")
+    p.add_argument("--no-obsbot-neutral-on-start", action="store_true",
+                    help="Do not centre and zoom out the OBSBOT camera at startup")
     p.add_argument("--obsbot-cli-path", type=non_empty("a path or command name"),
                     help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
@@ -175,6 +177,8 @@ def parse_args(argv: list[str] | None = None) -> Config:
         config.obsbot_tracking_enabled = True
     if args.no_obsbot_tracking_on_run:
         config.obsbot_tracking_on_run = False
+    if args.no_obsbot_neutral_on_start:
+        config.obsbot_neutral_on_start = False
     if args.obsbot_cli_path is not None:
         config.obsbot_cli_path = args.obsbot_cli_path
 
@@ -367,7 +371,7 @@ def main() -> None:
     interrupted = False
     try:
         if config.obsbot_tracking_on_run:
-            enable_tracking(config)
+            enable_tracking(config, neutral_first=config.obsbot_neutral_on_start)
         worker = threading.Thread(
             target=capture_loop, args=(config, state, stop, errors),
             name="pystory-capture", daemon=True,

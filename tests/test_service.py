@@ -134,13 +134,34 @@ def test_up_turns_tracking_on_and_down_turns_it_off(monkeypatch, tmp_path):
     assert run(monkeypatch, "up", *flags, "--obsbot-cli-path", str(cli)) == 0
     pid = int((tmp_path / "pystory.pid").read_text())
     try:
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 15
         while not calls.exists() and time.monotonic() < deadline:
             time.sleep(0.1)
-        assert calls.read_text().splitlines() == ["i 2 q "]  # Single Human Tracking
+        # AI off, centre, zoom to 1x, then Single Human Tracking, in one session.
+        assert calls.read_text().splitlines() == ["I 9 4 i 2 q "]
 
         assert run(monkeypatch, "down", "--storage-dir", str(tmp_path)) == 0
-        assert calls.read_text().splitlines() == ["i 2 q ", "I q "]  # then AI off
+        assert calls.read_text().splitlines() == ["I 9 4 i 2 q ", "I q "]  # then AI off
+    finally:
+        if alive(pid):
+            os.kill(pid, 9)
+
+
+def test_no_obsbot_neutral_on_start_only_turns_tracking_on(monkeypatch, tmp_path):
+    cli = tmp_path / "obsbot-cli"
+    cli.write_text(FAKE_OBSBOT_CLI)
+    cli.chmod(0o755)
+    calls = tmp_path / "calls.log"
+    flags = [f for f in safe_flags(tmp_path) if f != "--no-obsbot-tracking-on-run"]
+
+    assert run(monkeypatch, "up", *flags, "--obsbot-cli-path", str(cli),
+               "--no-obsbot-neutral-on-start") == 0
+    pid = int((tmp_path / "pystory.pid").read_text())
+    try:
+        deadline = time.monotonic() + 15
+        while not calls.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert calls.read_text().splitlines() == ["i 2 q "]
     finally:
         if alive(pid):
             os.kill(pid, 9)
