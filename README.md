@@ -54,6 +54,7 @@ uv run pystory \
 | `--lock-panic-hotkey` | `<Control-Alt-Escape>` | Tk keysym that force-dismisses the overlay (empty is refused: an empty keysym cannot bind) |
 | `--obsbot-tracking` | | Enable/disable OBSBOT AI person-tracking based on presence |
 | `--no-obsbot-tracking-on-run` | | Don't turn OBSBOT AI tracking on when pystory starts and off when it stops |
+| `--no-obsbot-neutral-on-start` | | Don't centre and zoom out the OBSBOT camera when pystory starts |
 | `--obsbot-cli-path` | `obsbot-cli` | Path to the `obsbot-cli` binary (empty is refused: it cannot exec) |
 
 ## Running in the background
@@ -179,8 +180,9 @@ AI person-tracking on while you're present and off while you're away:
 uv run pystory --obsbot-tracking --obsbot-cli-path ~/.local/bin/obsbot-cli
 ```
 
-Separately, and on by default, pystory turns AI tracking on when it starts
-and off when it exits (Ctrl-C, `pystory down`, or a systemd stop). Pass
+Separately, and on by default, pystory centres the camera and zooms it
+out to 1x when it starts, then turns AI tracking on, and turns tracking
+off when it exits (Ctrl-C, `pystory down`, or a systemd stop). Pass
 `--no-obsbot-tracking-on-run` to leave the camera alone. With no OBSBOT
 attached this just logs a warning. Ctrl-C exits at once and leaves
 `obsbot-cli` turning tracking off in the background for a few seconds;

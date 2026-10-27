@@ -47,7 +47,10 @@ CHILD = textwrap.dedent("""
 FAKE_CLI = textwrap.dedent("""\
     #!/bin/sh
     input=$(cat)
+    # The startup script also begins with I (AI off before recentring), so
+    # only a script without the enable command 'i' counts as the disable.
     case "$input" in
+      *i*) ;;
       I*) sleep {delay}; echo off > "{marker}" ;;
     esac
 """)
