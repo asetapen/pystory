@@ -53,7 +53,22 @@ uv run pystory \
 | `--lock-passphrase` | | Passphrase that dismisses the lock overlay |
 | `--lock-panic-hotkey` | `<Control-Alt-Escape>` | Tk keysym that force-dismisses the overlay (empty is refused: an empty keysym cannot bind) |
 | `--obsbot-tracking` | | Enable/disable OBSBOT AI person-tracking based on presence |
+| `--no-obsbot-tracking-on-run` | | Don't turn OBSBOT AI tracking on when pystory starts and off when it stops |
 | `--obsbot-cli-path` | `obsbot-cli` | Path to the `obsbot-cli` binary (empty is refused: it cannot exec) |
+
+## Running in the background
+
+```bash
+uv run pystory up      # start detached; flags after `up` go to pystory
+uv run pystory down    # stop it
+```
+
+`up` writes the pid to `~/.pystory/pystory.pid` and appends output to
+`~/.pystory/pystory.log` (both follow `--storage-dir`). Running `up` again
+while it is running does nothing, and if pystory exits within a second of
+starting (a bad flag, for example) `up` says so and exits 1. `down` sends
+SIGTERM, so pystory's exit path runs (including turning OBSBOT tracking off),
+and falls back to SIGKILL after 20 s.
 
 ## Face Recognition
 
@@ -94,8 +109,8 @@ uv run pystory --no-face-recognition
 
 ### Making recognition reliable
 
-`pystory-enroll` auto-captures samples (default 8) as you follow on-screen pose
-prompts (straight, left, right, chin up, chin down) — no manual keypress
+`pystory-enroll` auto-captures samples (default 8, one every 3 seconds; `--delay`
+changes the gap) as you follow on-screen pose prompts (straight, left, right, chin up, chin down) — no manual keypress
 needed, which makes it easy to actually capture a good variety of angles.
 More/varied samples means fewer false "not recognized" hits day-to-day.
 
@@ -160,6 +175,11 @@ AI person-tracking on while you're present and off while you're away:
 ```bash
 uv run pystory --obsbot-tracking --obsbot-cli-path ~/.local/bin/obsbot-cli
 ```
+
+Separately, and on by default, pystory turns AI tracking on when it starts
+and off when it exits (Ctrl-C, `pystory down`, or a systemd stop). Pass
+`--no-obsbot-tracking-on-run` to leave the camera alone. With no OBSBOT
+attached this just logs a warning.
 
 Tracking mode/sub-mode are configurable via `Config.obsbot_ai_mode` /
 `obsbot_ai_sub_mode` (defaults: Single Human Tracking, Upper Body). This

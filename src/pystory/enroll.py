@@ -5,12 +5,14 @@ from pathlib import Path
 
 import cv2
 
-from pystory.capture import WEBCAM_API, resolve_webcam_device
+from pystory.capture import open_webcam, resolve_webcam_device
 from pystory.config import Config
 from pystory.main import bounded_int, camera_device
 from pystory.recognition import encode_face, load_encodings, save_encodings
 
 log = logging.getLogger("pystory.enroll")
+
+PROMPT_COLOR = (0, 0, 255)  # BGR red
 
 # Prompts walk the user through varied head angles so the enrolled encoding
 # set covers more of the pose space recognition will see in practice.
@@ -24,7 +26,7 @@ POSE_PROMPTS = [
 ]
 
 
-def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5, reset: bool = False) -> int:
+def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 3.0, reset: bool = False) -> int:
     """Auto-capture face samples from the webcam and enroll them.
 
     Cycles through pose prompts and automatically grabs a sample every
@@ -39,9 +41,8 @@ def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5
     existing = [] if reset else load_encodings(config)
     new_encodings: list = []
 
-    device = resolve_webcam_device(config.webcam_device)
-    log.info("Using camera %s", device)
-    cam = cv2.VideoCapture(device, WEBCAM_API)
+    log.info("Using camera %s", resolve_webcam_device(config.webcam_device))
+    cam = open_webcam(config)
     try:
         print(f"Capturing {num_samples} sample(s) automatically. Follow the prompts.")
         print("Press Q to finish early, ESC to cancel.")
@@ -60,7 +61,7 @@ def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5
 
             display = frame.copy()
             cv2.putText(display, f"Sample {captured}/{num_samples}: {prompt}",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, PROMPT_COLOR, 2)
             cv2.putText(display, f"capturing in {remaining:.1f}s...",
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
             cv2.imshow("pystory - enroll", display)
@@ -103,7 +104,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Enroll your face for pystory recognition")
     p.add_argument("--storage-dir", type=Path, help="Where pystory data is stored")
     p.add_argument("--samples", type=bounded_int(1), default=8, help="Number of face samples to capture (default: 8)")
-    p.add_argument("--delay", type=float, default=1.5, help="Seconds between auto-captures (default: 1.5)")
+    p.add_argument("--delay", type=float, default=3.0, help="Seconds between auto-captures (default: 3.0)")
     p.add_argument("--reset", action="store_true", help="Clear all enrolled faces before enrolling")
     p.add_argument("--webcam-device", type=camera_device,
                     help="Camera to use: auto, an index (0, 1, ...) or a device path like /dev/video2 "

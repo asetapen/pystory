@@ -67,8 +67,23 @@ def take_screenshot(timestamp: str, config: Config) -> tuple[Path, np.ndarray]:
     return path, frame
 
 
-def take_webcam_picture(timestamp: str, config: Config) -> tuple[Path | None, np.ndarray | None]:
+def open_webcam(config: Config):
+    """Open the configured camera through V4L2 at the configured resolution.
+
+    MJPG is requested first because a UVC camera usually offers 1920x1080 at a
+    usable frame rate only in MJPG; uncompressed YUYV at that size is limited by
+    USB bandwidth. A camera that cannot do the size picks its nearest mode, so
+    this is a request, not a guarantee.
+    """
     cam = cv2.VideoCapture(resolve_webcam_device(config.webcam_device), WEBCAM_API)
+    cam.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, config.webcam_width)
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, config.webcam_height)
+    return cam
+
+
+def take_webcam_picture(timestamp: str, config: Config) -> tuple[Path | None, np.ndarray | None]:
+    cam = open_webcam(config)
     try:
         # The camera is opened fresh every tick, and the first frames after an
         # open are taken before auto-exposure settles. Measured on an OBSBOT
