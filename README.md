@@ -43,7 +43,8 @@ uv run pystory \
 | `--face-tolerance` | `0.6` | Face match tolerance (lower = stricter) |
 | `--no-screenshot` | | Disable screenshot capture |
 | `--no-webcam` | | Disable webcam capture |
-| `--webcam-device` | `0` | Camera to use: an index (`0`, `1`, ...) or a device path like `/dev/video2` |
+| `--webcam-device` | `auto` | Camera to use: `auto` (an attached OBSBOT, else `0`), an index (`0`, `1`, ...) or a device path like `/dev/video2` |
+| `--webcam-warmup-frames` | `20` | Frames discarded after opening the camera while auto-exposure settles (`0` = none; negatives refused) |
 | `--debug-ui` | | Show live preview windows (press `q` to quit) |
 | `--presence-confirm-ticks` | `2` | Consecutive same-result ticks needed before locking/unlocking (minimum `1`; `0` and negatives refused) |
 | `--no-camera-failure-lock` | | Don't let a sustained webcam failure lock the desk (restores fail-open) |
@@ -68,16 +69,20 @@ uv run pystory-enroll --samples 10
 # re-enroll from scratch
 uv run pystory-enroll --reset
 
-# use a specific camera (e.g. an external OBSBOT, not the laptop's built-in)
+# use a specific camera instead of the default
 uv run pystory-enroll --webcam-device /dev/video2
 ```
 
 If more than one camera is attached, `--webcam-device` (also accepted by
 `pystory` itself) picks which one opens: an index (`0`, `1`, ...) as the OS
 enumerates video devices, or a device path (`/dev/video2`). List what's
-available with `v4l2-ctl --list-devices` or `ls /dev/video*`. The default
-(`0`) is whichever camera the OS enumerates first, which on a laptop with an
-external camera attached is usually the built-in one, not the external one.
+available with `v4l2-ctl --list-devices` or `ls /dev/video*`. The default,
+`auto`, opens an attached OBSBOT (found by name under `/dev/v4l/by-id/`) and
+falls back to `0`, whichever camera the OS enumerates first, when no OBSBOT is
+plugged in. It is re-resolved each time the camera is opened, so unplugging the
+OBSBOT mid-run switches pystory to the built-in camera rather than failing. A
+v4l2loopback virtual camera is never picked by `auto`; pass its path explicitly.
+Enroll and run with the same camera: recognition is most reliable when they match.
 
 Once enrolled, pystory will lock the screen if it sees no face *or* an unrecognized face. If no faces are enrolled, it falls back to detection-only mode (any face prevents locking).
 

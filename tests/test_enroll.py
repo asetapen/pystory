@@ -61,7 +61,7 @@ class FakeCv2:
         self._keys = list(keys)
         self.destroy_calls = 0
 
-    def VideoCapture(self, index):
+    def VideoCapture(self, index, api=None):
         return self._camera
 
     def putText(self, *args, **kwargs):

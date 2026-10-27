@@ -7,7 +7,7 @@ from pathlib import Path
 
 import cv2
 
-from pystory.capture import take_screenshot, take_webcam_picture, detect_face
+from pystory.capture import take_screenshot, take_webcam_picture, detect_face, resolve_webcam_device
 from pystory.config import Config
 from pystory.obsbot import disable_tracking, enable_tracking
 from pystory.presence import PresenceTracker
@@ -94,7 +94,10 @@ def parse_args() -> Config:
     p.add_argument("--no-screenshot", action="store_true", help="Disable screenshots")
     p.add_argument("--no-webcam", action="store_true", help="Disable webcam capture")
     p.add_argument("--webcam-device", type=camera_device,
-                    help="Camera to use: an index (0, 1, ...) or a device path like /dev/video2 (default: 0)")
+                    help="Camera to use: auto, an index (0, 1, ...) or a device path like /dev/video2 "
+                         "(default: auto = an attached OBSBOT, else 0)")
+    p.add_argument("--webcam-warmup-frames", type=bounded_int(0),
+                    help="Frames discarded after opening the camera while exposure settles (default: 20)")
     p.add_argument("--debug-ui", action="store_true", help="Show live preview windows")
     p.add_argument("--presence-confirm-ticks", type=bounded_int(1),
                     help="Consecutive same-result ticks needed before locking/unlocking (default: 2)")
@@ -145,6 +148,8 @@ def parse_args() -> Config:
         config.webcam_enabled = False
     if args.webcam_device is not None:
         config.webcam_device = args.webcam_device
+    if args.webcam_warmup_frames is not None:
+        config.webcam_warmup_frames = args.webcam_warmup_frames
     if args.debug_ui:
         config.debug_ui = True
     if args.presence_confirm_ticks is not None:
@@ -325,6 +330,8 @@ def main() -> None:
     config.storage_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("Starting pystory (interval=%ds, storage=%s)", config.interval_seconds, config.storage_dir)
+    if config.webcam_enabled:
+        log.info("Webcam device %s resolves to %s", config.webcam_device, resolve_webcam_device(config.webcam_device))
 
     state = AppState()
     state.presence.confirm_ticks = config.presence_confirm_ticks

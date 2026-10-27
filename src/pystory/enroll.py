@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 
+from pystory.capture import WEBCAM_API, resolve_webcam_device
 from pystory.config import Config
 from pystory.main import bounded_int, camera_device
 from pystory.recognition import encode_face, load_encodings, save_encodings
@@ -38,7 +39,9 @@ def capture_and_enroll(config: Config, num_samples: int, auto_delay: float = 1.5
     existing = [] if reset else load_encodings(config)
     new_encodings: list = []
 
-    cam = cv2.VideoCapture(config.webcam_device)
+    device = resolve_webcam_device(config.webcam_device)
+    log.info("Using camera %s", device)
+    cam = cv2.VideoCapture(device, WEBCAM_API)
     try:
         print(f"Capturing {num_samples} sample(s) automatically. Follow the prompts.")
         print("Press Q to finish early, ESC to cancel.")
@@ -103,7 +106,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--delay", type=float, default=1.5, help="Seconds between auto-captures (default: 1.5)")
     p.add_argument("--reset", action="store_true", help="Clear all enrolled faces before enrolling")
     p.add_argument("--webcam-device", type=camera_device,
-                    help="Camera to use: an index (0, 1, ...) or a device path like /dev/video2 (default: 0)")
+                    help="Camera to use: auto, an index (0, 1, ...) or a device path like /dev/video2 "
+                         "(default: auto = an attached OBSBOT, else 0)")
     return p.parse_args()
 
 
