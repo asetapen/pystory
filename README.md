@@ -144,7 +144,10 @@ disconnected webcam disables the lock entirely.
 
 `--lock-overlay` shows a fullscreen, grabbed, always-on-top window when
 you're not recognized, and hides it the moment you're recognized again —
-driven by the same debounced presence signal as `--no-face-hook`.
+driven by the same debounced presence signal as `--no-face-hook`. Every
+monitor is covered: the passphrase prompt is on the primary one and the
+others go black. If the monitor layout cannot be read it falls back to a
+single fullscreen window.
 
 ```bash
 uv run pystory --lock-overlay --lock-passphrase "supersecret"
