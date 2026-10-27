@@ -59,6 +59,7 @@ STRING_FLAGS = [
     ("--no-face-hook", "no_face_hook", "loginctl lock-session"),
     ("--lock-panic-hotkey", "lock_panic_hotkey", "<Control-Alt-Escape>"),
     ("--obsbot-cli-path", "obsbot_cli_path", "obsbot-cli"),
+    ("--v4l2-ctl-path", "v4l2_ctl_path", "v4l2-ctl"),
 ]
 
 # Flags whose empty value is coherent and must LAND.
@@ -70,6 +71,7 @@ EMPTY_IS_COHERENT = [
 UNWORKABLE = [
     ("--lock-panic-hotkey", ""),
     ("--obsbot-cli-path", ""),
+    ("--v4l2-ctl-path", ""),
     ("--camera-failure-grace-ticks", "-1"),
 ]
 

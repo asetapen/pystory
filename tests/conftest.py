@@ -16,4 +16,7 @@ def no_real_obsbot_cli(monkeypatch):
         return False
 
     monkeypatch.setattr(obsbot, "_run_cli", fake_run_cli)
+    # Centring would otherwise drive a real OBSBOT through v4l2-ctl whenever
+    # one is plugged in to the machine running the tests.
+    monkeypatch.setattr(obsbot, "_set_controls", lambda config, device, controls: False)
     return calls

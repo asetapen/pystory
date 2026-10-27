@@ -60,9 +60,12 @@ class Config:
     # when it stops, independent of presence. Without an OBSBOT attached,
     # obsbot-cli reports no device and both calls just log a warning.
     obsbot_tracking_on_run: bool = True
-    # Centre pan/tilt and zoom to 1x at startup, before tracking goes on.
-    # Part of the startup call above, so off whenever that is off.
+    # Centre pan/tilt and zoom to 1x at startup, then wait this long before
+    # tracking goes on. Part of the startup call above, so off whenever that
+    # is off. Centring uses v4l2-ctl (v4l-utils).
     obsbot_neutral_on_start: bool = True
+    obsbot_neutral_pause_seconds: int = 3
+    v4l2_ctl_path: str = "v4l2-ctl"
     obsbot_cli_path: str = "obsbot-cli"
     obsbot_ai_mode: int = 2  # 2 = Single Human Tracking
     obsbot_ai_sub_mode: int = 1  # 1 = UpperBody
