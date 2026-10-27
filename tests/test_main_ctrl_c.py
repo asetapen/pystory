@@ -94,7 +94,7 @@ def test_ctrl_c_exits_at_once_while_a_tick_is_stuck_in_c(tmp_path):
 
 def test_ctrl_c_does_not_wait_for_obsbot_but_still_turns_tracking_off(tmp_path):
     cli, marker = fake_cli(tmp_path, delay=3)
-    proc = start_child(tmp_path, "idle", "--obsbot-cli-path", str(cli))
+    proc = start_child(tmp_path, "idle", "--obsbot-cli-path", str(cli), "--no-obsbot-neutral-on-start")
     rc, elapsed = interrupt_and_time(proc)
 
     assert rc == 130
@@ -111,7 +111,7 @@ def test_sigterm_still_waits_for_tracking_off(tmp_path):
     process exits, so a background disable would be killed there. SIGTERM
     keeps waiting for it."""
     cli, marker = fake_cli(tmp_path, delay=1)
-    proc = start_child(tmp_path, "idle", "--obsbot-cli-path", str(cli))
+    proc = start_child(tmp_path, "idle", "--obsbot-cli-path", str(cli), "--no-obsbot-neutral-on-start")
     rc, elapsed = interrupt_and_time(proc, signal.SIGTERM)
 
     assert rc == 0

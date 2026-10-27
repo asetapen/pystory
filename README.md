@@ -55,6 +55,8 @@ uv run pystory \
 | `--obsbot-tracking` | | Enable/disable OBSBOT AI person-tracking based on presence |
 | `--no-obsbot-tracking-on-run` | | Don't turn OBSBOT AI tracking on when pystory starts and off when it stops |
 | `--no-obsbot-neutral-on-start` | | Don't centre and zoom out the OBSBOT camera when pystory starts |
+| `--obsbot-neutral-pause` | `3` | Seconds to hold the camera centred before tracking starts |
+| `--v4l2-ctl-path` | `v4l2-ctl` | Path to `v4l2-ctl`, used to centre the camera (empty is refused: it cannot exec) |
 | `--obsbot-cli-path` | `obsbot-cli` | Path to the `obsbot-cli` binary (empty is refused: it cannot exec) |
 
 ## Running in the background
@@ -181,12 +183,17 @@ uv run pystory --obsbot-tracking --obsbot-cli-path ~/.local/bin/obsbot-cli
 ```
 
 Separately, and on by default, pystory centres the camera and zooms it
-out to 1x when it starts, then turns AI tracking on, and turns tracking
-off when it exits (Ctrl-C, `pystory down`, or a systemd stop). Pass
+out to 1x when it starts, holds it there for `--obsbot-neutral-pause`
+seconds, then turns AI tracking on, and turns tracking off when it exits (Ctrl-C, `pystory down`, or a systemd stop). Pass
 `--no-obsbot-tracking-on-run` to leave the camera alone. With no OBSBOT
 attached this just logs a warning. Ctrl-C exits at once and leaves
 `obsbot-cli` turning tracking off in the background for a few seconds;
 `pystory down` and a systemd stop wait for it.
+
+Centring uses the camera's standard UVC pan/tilt/zoom controls through
+`v4l2-ctl` (`sudo apt install v4l-utils`), because `obsbot-cli`'s "centre
+view" does not move a Tiny 2's gimbal. It applies to the camera pystory
+captures from, so it is skipped when `--webcam-device` is a camera index.
 
 Tracking mode/sub-mode are configurable via `Config.obsbot_ai_mode` /
 `obsbot_ai_sub_mode` (defaults: Single Human Tracking, Upper Body). This

@@ -1,6 +1,8 @@
 import logging
 import subprocess
+import threading
 
+from pystory.capture import resolve_webcam_device
 from pystory.config import Config
 
 log = logging.getLogger("pystory.obsbot")
@@ -10,10 +12,15 @@ log = logging.getLogger("pystory.obsbot")
 # outright. See obsbot-camera-control's src/cli/meet2_test.cpp runInteractiveMode.
 _ENABLE_SCRIPT = "i\n{ai_mode}\nq\n"
 _DISABLE_SCRIPT = "I\nq\n"
-# AI off first so tracking cannot steer the gimbal while it recentres, then
-# '9' centres pan/tilt and '4' zooms out. obsbot-cli tracks zoom from 1.0 in
-# each session and clamps zoom-out at 1.0, so one '4' always sets 1x.
-_NEUTRAL_COMMANDS = "I\n9\n4\n"
+
+# Centring goes through the camera's standard UVC controls, not obsbot-cli:
+# obsbot-cli's "centre view" calls an SDK function documented for the Meet
+# models only, and on a Tiny 2 it reports success without moving the gimbal.
+# The nudge comes first because a control set to the value it already holds
+# may not be sent to the camera, and AI tracking moves the gimbal without
+# changing the value the control reports.
+_V4L2_NUDGE = "pan_absolute=3600,tilt_absolute=3600"
+_V4L2_NEUTRAL = "pan_absolute=0,tilt_absolute=0,zoom_absolute=0"
 
 
 def _run_cli(config: Config, script: str) -> bool:
@@ -41,21 +48,62 @@ def _run_cli(config: Config, script: str) -> bool:
     return True
 
 
-def enable_tracking(config: Config, neutral_first: bool = False) -> bool:
-    """Enable AI person-tracking (pan/tilt/zoom follow) on the OBSBOT camera.
-
-    With `neutral_first`, recentre and zoom out before enabling it, in the
-    same obsbot-cli session: connecting alone takes several seconds.
-    """
-    script = _ENABLE_SCRIPT.format(ai_mode=config.obsbot_ai_mode)
-    if neutral_first:
-        script = _NEUTRAL_COMMANDS + script
-    ok = _run_cli(config, script)
+def enable_tracking(config: Config) -> bool:
+    """Enable AI person-tracking (pan/tilt/zoom follow) on the OBSBOT camera."""
+    ok = _run_cli(config, _ENABLE_SCRIPT.format(ai_mode=config.obsbot_ai_mode))
     if ok:
-        if neutral_first:
-            log.info("OBSBOT centred and zoomed out")
         log.info("OBSBOT tracking enabled (ai_mode=%d)", config.obsbot_ai_mode)
     return ok
+
+
+def _set_controls(config: Config, device: str, controls: str) -> bool:
+    try:
+        result = subprocess.run(
+            [config.v4l2_ctl_path, "-d", device, "-c", controls],
+            capture_output=True, text=True, timeout=10,
+        )
+    except FileNotFoundError:
+        log.error("v4l2-ctl not found at %r (Ubuntu: apt install v4l-utils)", config.v4l2_ctl_path)
+        return False
+    except subprocess.SubprocessError as e:
+        log.error("v4l2-ctl failed: %s", e)
+        return False
+    if result.returncode != 0:
+        log.error("v4l2-ctl exited %d: %s", result.returncode, result.stderr.strip())
+        return False
+    return True
+
+
+def centre_camera(config: Config) -> bool:
+    """Point the camera pystory captures from straight ahead, zoomed out to 1x.
+
+    That is the attached OBSBOT under the default `webcam_device` ("auto").
+    AI tracking must already be off, or it steers the gimbal straight back.
+    """
+    device = resolve_webcam_device(config.webcam_device)
+    if not isinstance(device, str):
+        log.warning("Camera %r is not an OBSBOT device node; not centring it", device)
+        return False
+    if not (_set_controls(config, device, _V4L2_NUDGE)
+            and _set_controls(config, device, _V4L2_NEUTRAL)):
+        return False
+    log.info("OBSBOT centred and zoomed out")
+    return True
+
+
+def start_tracking(config: Config, stop: threading.Event) -> bool:
+    """pystory's startup sequence: optionally centre and pause, then track.
+
+    The pause lets the camera settle at centre before tracking takes the
+    gimbal over. It waits on `stop`, so Ctrl-C during it is not delayed, and
+    tracking is not turned on at all once `stop` is set.
+    """
+    if config.obsbot_neutral_on_start:
+        disable_tracking(config)
+        centre_camera(config)
+        if stop.wait(config.obsbot_neutral_pause_seconds):
+            return False
+    return enable_tracking(config)
 
 
 def disable_tracking(config: Config) -> bool:

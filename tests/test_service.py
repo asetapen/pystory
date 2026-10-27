@@ -123,44 +123,60 @@ FAKE_OBSBOT_CLI = """#!/bin/sh
 printf '%s\\n' "$(cat | tr '\\n' ' ')" >> "$(dirname "$0")/calls.log"
 """
 
+# Records its arguments into the same log, so the order of the two is visible.
+FAKE_V4L2_CTL = """#!/bin/sh
+echo "v4l2-ctl $*" >> "$(dirname "$0")/calls.log"
+"""
 
-def test_up_turns_tracking_on_and_down_turns_it_off(monkeypatch, tmp_path):
-    cli = tmp_path / "obsbot-cli"
-    cli.write_text(FAKE_OBSBOT_CLI)
-    cli.chmod(0o755)
-    calls = tmp_path / "calls.log"
+
+def camera_fakes(tmp_path):
+    """Fake obsbot-cli and v4l2-ctl, and a camera path that is not the real
+    OBSBOT, so these tests never move a camera attached to this machine."""
+    for name, body in (("obsbot-cli", FAKE_OBSBOT_CLI), ("v4l2-ctl", FAKE_V4L2_CTL)):
+        (tmp_path / name).write_text(body)
+        (tmp_path / name).chmod(0o755)
     flags = [f for f in safe_flags(tmp_path) if f != "--no-obsbot-tracking-on-run"]
+    return flags + ["--obsbot-cli-path", str(tmp_path / "obsbot-cli"),
+                    "--v4l2-ctl-path", str(tmp_path / "v4l2-ctl"),
+                    "--webcam-device", "/dev/fake-obsbot"]
 
-    assert run(monkeypatch, "up", *flags, "--obsbot-cli-path", str(cli)) == 0
+
+def wait_for_lines(path, n, timeout=20):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists() and len(path.read_text().splitlines()) >= n:
+            break
+        time.sleep(0.1)
+    return path.read_text().splitlines() if path.exists() else []
+
+
+def test_up_centres_the_camera_then_tracks_and_down_turns_it_off(monkeypatch, tmp_path):
+    calls = tmp_path / "calls.log"
+    assert run(monkeypatch, "up", *camera_fakes(tmp_path), "--obsbot-neutral-pause", "0") == 0
     pid = int((tmp_path / "pystory.pid").read_text())
     try:
-        deadline = time.monotonic() + 15
-        while not calls.exists() and time.monotonic() < deadline:
-            time.sleep(0.1)
-        # AI off, centre, zoom to 1x, then Single Human Tracking, in one session.
-        assert calls.read_text().splitlines() == ["I 9 4 i 2 q "]
+        started = [
+            "I q ",  # AI off, so tracking cannot steer the gimbal while it recentres
+            "v4l2-ctl -d /dev/fake-obsbot -c pan_absolute=3600,tilt_absolute=3600",
+            "v4l2-ctl -d /dev/fake-obsbot -c pan_absolute=0,tilt_absolute=0,zoom_absolute=0",
+            "i 2 q ",  # then Single Human Tracking
+        ]
+        assert wait_for_lines(calls, 4) == started
 
         assert run(monkeypatch, "down", "--storage-dir", str(tmp_path)) == 0
-        assert calls.read_text().splitlines() == ["I 9 4 i 2 q ", "I q "]  # then AI off
+        assert calls.read_text().splitlines() == started + ["I q "]  # then AI off
     finally:
         if alive(pid):
             os.kill(pid, 9)
 
 
 def test_no_obsbot_neutral_on_start_only_turns_tracking_on(monkeypatch, tmp_path):
-    cli = tmp_path / "obsbot-cli"
-    cli.write_text(FAKE_OBSBOT_CLI)
-    cli.chmod(0o755)
     calls = tmp_path / "calls.log"
-    flags = [f for f in safe_flags(tmp_path) if f != "--no-obsbot-tracking-on-run"]
-
-    assert run(monkeypatch, "up", *flags, "--obsbot-cli-path", str(cli),
-               "--no-obsbot-neutral-on-start") == 0
+    assert run(monkeypatch, "up", *camera_fakes(tmp_path), "--no-obsbot-neutral-on-start") == 0
     pid = int((tmp_path / "pystory.pid").read_text())
     try:
-        deadline = time.monotonic() + 15
-        while not calls.exists() and time.monotonic() < deadline:
-            time.sleep(0.1)
+        assert wait_for_lines(calls, 1) == ["i 2 q "]
+        time.sleep(1)
         assert calls.read_text().splitlines() == ["i 2 q "]
     finally:
         if alive(pid):

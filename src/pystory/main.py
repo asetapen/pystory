@@ -12,7 +12,7 @@ import cv2
 
 from pystory.capture import take_screenshot, take_webcam_picture, detect_face, resolve_webcam_device
 from pystory.config import Config
-from pystory.obsbot import disable_tracking, disable_tracking_in_background, enable_tracking
+from pystory.obsbot import disable_tracking, disable_tracking_in_background, enable_tracking, start_tracking
 from pystory.presence import PresenceTracker
 from pystory.recognition import is_recognized, load_encodings
 from pystory.storage import prune_old_files
@@ -122,6 +122,10 @@ def parse_args(argv: list[str] | None = None) -> Config:
                     help="Do not turn OBSBOT AI tracking on at startup and off at exit")
     p.add_argument("--no-obsbot-neutral-on-start", action="store_true",
                     help="Do not centre and zoom out the OBSBOT camera at startup")
+    p.add_argument("--obsbot-neutral-pause", type=bounded_int(0),
+                    help="Seconds to hold the camera centred before tracking starts (default: 3)")
+    p.add_argument("--v4l2-ctl-path", type=non_empty("a path or command name"),
+                    help="Path to v4l2-ctl, used to centre the camera (default: v4l2-ctl on PATH)")
     p.add_argument("--obsbot-cli-path", type=non_empty("a path or command name"),
                     help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
@@ -179,6 +183,10 @@ def parse_args(argv: list[str] | None = None) -> Config:
         config.obsbot_tracking_on_run = False
     if args.no_obsbot_neutral_on_start:
         config.obsbot_neutral_on_start = False
+    if args.obsbot_neutral_pause is not None:
+        config.obsbot_neutral_pause_seconds = args.obsbot_neutral_pause
+    if args.v4l2_ctl_path is not None:
+        config.v4l2_ctl_path = args.v4l2_ctl_path
     if args.obsbot_cli_path is not None:
         config.obsbot_cli_path = args.obsbot_cli_path
 
@@ -371,7 +379,7 @@ def main() -> None:
     interrupted = False
     try:
         if config.obsbot_tracking_on_run:
-            enable_tracking(config, neutral_first=config.obsbot_neutral_on_start)
+            start_tracking(config, stop)
         worker = threading.Thread(
             target=capture_loop, args=(config, state, stop, errors),
             name="pystory-capture", daemon=True,
