@@ -63,6 +63,18 @@ def up(flags: list[str]) -> int:
         print(f"pystory is already running (pid {pid})")
         return 0
 
+    # Reject bad flags here, where argparse's message reaches the terminal at
+    # once. The child only parses them after its heavy imports, which can
+    # take longer than STARTUP_CHECK_SECONDS, so `up` would report it started.
+    from pystory.main import parse_args
+    try:
+        parse_args(flags)
+    except SystemExit as e:
+        if e.code:
+            print("pystory not started: invalid flags", file=sys.stderr)
+            return 1
+        return 0  # --help
+
     log_path = storage_dir / LOG_FILE
     with open(log_path, "ab") as log:
         proc = subprocess.Popen(

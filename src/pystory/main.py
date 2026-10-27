@@ -82,7 +82,7 @@ def non_empty(what: str):
     return parse
 
 
-def parse_args() -> Config:
+def parse_args(argv: list[str] | None = None) -> Config:
     p = argparse.ArgumentParser(description="Screenshot + webcam capture with face detection")
     p.add_argument("--storage-dir", type=Path, help="Where to store captures")
     p.add_argument("--interval", type=bounded_int(0),
@@ -123,7 +123,7 @@ def parse_args() -> Config:
     p.add_argument("--obsbot-cli-path", type=non_empty("a path or command name"),
                     help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
-    args = p.parse_args()
+    args = p.parse_args(argv)
     config = Config()
 
     # Every flag that carries a VALUE is gated on `is not None`, never on
