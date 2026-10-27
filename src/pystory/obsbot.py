@@ -51,3 +51,33 @@ def disable_tracking(config: Config) -> bool:
     if ok:
         log.info("OBSBOT tracking disabled")
     return ok
+
+
+def disable_tracking_in_background(config: Config) -> bool:
+    """Start disabling AI tracking and return without waiting for it.
+
+    obsbot-cli takes several seconds just to connect, which is what made
+    Ctrl-C slow. The child gets its own session so the terminal's SIGINT does
+    not reach it, and it reads the already-written script after we exit. Not
+    for a systemd stop: systemd kills everything left in the unit's cgroup.
+    """
+    try:
+        proc = subprocess.Popen(
+            [config.obsbot_cli_path, "-i"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            start_new_session=True,
+        )
+    except OSError as e:
+        log.error("obsbot-cli could not be started at %r: %s", config.obsbot_cli_path, e)
+        return False
+    try:
+        proc.stdin.write(_DISABLE_SCRIPT)
+        proc.stdin.close()
+    except OSError as e:
+        log.error("obsbot-cli did not accept the disable command: %s", e)
+        return False
+    log.info("Turning OBSBOT tracking off in the background")
+    return True
