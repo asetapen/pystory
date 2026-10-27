@@ -26,6 +26,7 @@ on-disk file is the thing actually asserted on.
 import numpy as np
 import pytest
 
+import pystory.capture as capture
 import pystory.enroll as enroll
 import pystory.recognition as recognition
 from pystory.config import Config
@@ -44,6 +45,9 @@ class FakeCamera:
         self._reads = list(reads)
         self.release_calls = 0
 
+    def set(self, prop, value):
+        return True
+
     def read(self):
         if self._reads:
             return self._reads.pop(0)
@@ -55,17 +59,23 @@ class FakeCamera:
 
 class FakeCv2:
     FONT_HERSHEY_SIMPLEX = 0
+    CAP_PROP_FOURCC = CAP_PROP_FRAME_WIDTH = CAP_PROP_FRAME_HEIGHT = 0
+
+    @staticmethod
+    def VideoWriter_fourcc(*chars):
+        return 0
 
     def __init__(self, camera, keys=()):
         self._camera = camera
         self._keys = list(keys)
         self.destroy_calls = 0
+        self.text_colors = []
 
     def VideoCapture(self, index, api=None):
         return self._camera
 
-    def putText(self, *args, **kwargs):
-        pass
+    def putText(self, img, text, org, font, scale, color, *args, **kwargs):
+        self.text_colors.append(color)
 
     def imshow(self, *args, **kwargs):
         pass
@@ -86,6 +96,8 @@ def install(monkeypatch, reads=(), keys=(), encoding=NEW):
     camera = FakeCamera(reads)
     fake_cv2 = FakeCv2(camera, keys)
     monkeypatch.setattr(enroll, "cv2", fake_cv2)
+    # The camera is opened through capture.open_webcam, which uses capture's cv2.
+    monkeypatch.setattr(capture, "cv2", fake_cv2)
     monkeypatch.setattr(enroll, "encode_face", lambda frame: encoding)
     return camera, fake_cv2
 
@@ -195,3 +207,21 @@ def test_samples_default_is_unaffected(monkeypatch):
     args = enroll.parse_args()
 
     assert args.samples == 8
+
+
+# ---------------------------------------------------------------------------
+# Prompt text colour and the default delay between auto-captures
+# ---------------------------------------------------------------------------
+
+def test_prompt_text_is_red(monkeypatch, tmp_path):
+    _, fake_cv2 = install(monkeypatch, reads=[(True, FRAME)])
+
+    enroll.capture_and_enroll(Config(storage_dir=tmp_path), num_samples=1, auto_delay=0.0)
+
+    assert fake_cv2.text_colors[0] == (0, 0, 255)  # BGR red, the prompt line
+
+
+def test_delay_default_is_three_seconds(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["pystory-enroll"])
+
+    assert enroll.parse_args().delay == 3.0

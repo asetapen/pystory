@@ -16,6 +16,7 @@ pystory captures screenshots and webcam pictures on a timer. If the enrolled use
 uv sync
 uv run pystory
 uv run pystory --debug-ui          # live preview windows
+uv run pystory up / pystory down   # run detached (pid + log in ~/.pystory)
 uv run pystory --no-face-recognition  # detection only (any face)
 uv run pystory --lock-overlay --lock-passphrase "..."  # fullscreen block overlay
 uv run pystory --obsbot-tracking   # drive OBSBOT AI tracking off presence
@@ -50,6 +51,7 @@ git config core.hooksPath .githooks
 All source is in `src/pystory/`. Five CLI entrypoints defined in `pyproject.toml [project.scripts]`:
 
 - **`pystory`** → `main.py:main` — Main capture loop. Each tick: screenshot (mss) → webcam (opencv) → face check → debounce via `PresenceTracker` → on a state transition: hook / lock overlay / OBSBOT tracking → prune old files. `--debug-ui` uses `cv2.imshow` with `cv2.waitKey` as the sleep mechanism.
+- **`pystory up` / `pystory down`** → `service.py` — `main()` dispatches these before argparse. `up` spawns `python -m pystory.main <flags>` in a new session with a pid file and log in the storage dir; `down` SIGTERMs it. `main()` installs a SIGTERM handler that calls `sys.exit` so its `finally` (which turns OBSBOT tracking off) runs.
 - **`pystory-enroll`** → `enroll.py:main` — Auto-captures face samples from the webcam while cycling pose prompts (straight/left/right/chin up/chin down) and stores dlib encodings as JSON in `~/.pystory/face_encodings.json`.
 - **`pystory-timelapse`** → `timelapse.py:main` — Reads stored JPEGs sorted by filename (embeds timestamp) and stitches into MP4 via `cv2.VideoWriter`.
 - **`pystory-s3-archive`** → `s3_archive.py:main` — Uploads captures older than `--min-age` to a configurable S3 URI via the `aws` CLI and deletes the local copy (unless `--keep-local`). Can loop with `--interval` or run as a systemd timer (`sys/pystory-s3-archive.{service,timer}`, fires nightly at 03:30 by default).

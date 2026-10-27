@@ -1,6 +1,8 @@
 import argparse
 import logging
+import signal
 import subprocess
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -113,6 +115,8 @@ def parse_args() -> Config:
                     help="Tk keysym that force-dismisses the overlay (default: <Control-Alt-Escape>)")
     p.add_argument("--obsbot-tracking", action="store_true",
                     help="Enable/disable OBSBOT AI tracking based on presence")
+    p.add_argument("--no-obsbot-tracking-on-run", action="store_true",
+                    help="Do not turn OBSBOT AI tracking on at startup and off at exit")
     p.add_argument("--obsbot-cli-path", type=non_empty("a path or command name"),
                     help="Path to obsbot-cli (default: obsbot-cli on PATH)")
 
@@ -166,6 +170,8 @@ def parse_args() -> Config:
         config.lock_panic_hotkey = args.lock_panic_hotkey
     if args.obsbot_tracking:
         config.obsbot_tracking_enabled = True
+    if args.no_obsbot_tracking_on_run:
+        config.obsbot_tracking_on_run = False
     if args.obsbot_cli_path is not None:
         config.obsbot_cli_path = args.obsbot_cli_path
 
@@ -321,6 +327,11 @@ def tick(config: Config, state: AppState) -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in ("up", "down"):
+        from pystory import service
+        command = service.up if sys.argv[1] == "up" else service.down
+        sys.exit(command(sys.argv[2:]))
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -340,6 +351,12 @@ def main() -> None:
         state.lock_overlay = LockOverlay(config)
         state.lock_overlay.start()
 
+    # SIGTERM (what `pystory down` and systemd send) would otherwise end the
+    # process without running the `finally` below, leaving tracking on.
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+
+    if config.obsbot_tracking_on_run:
+        enable_tracking(config)
     try:
         while True:
             tick(config, state)
@@ -355,6 +372,8 @@ def main() -> None:
             else:
                 time.sleep(config.interval_seconds)
     finally:
+        if config.obsbot_tracking_on_run:
+            disable_tracking(config)
         if config.debug_ui:
             cv2.destroyAllWindows()
 

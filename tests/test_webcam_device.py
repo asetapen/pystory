@@ -26,6 +26,11 @@ class DeadCamera:
 
     def __init__(self):
         self.release_calls = 0
+        self.props = {}
+
+    def set(self, prop, value):
+        self.props[prop] = value
+        return True
 
     def read(self):
         return False, None
@@ -35,17 +40,33 @@ class DeadCamera:
 
 
 class RecordingCv2:
-    def __init__(self):
+    """Stands in for the `cv2` module in capture.py and enroll.py. The property
+    constants are the real ones, so a recorded `set` can be checked against cv2."""
+
+    CAP_PROP_FOURCC = cv2.CAP_PROP_FOURCC
+    CAP_PROP_FRAME_WIDTH = cv2.CAP_PROP_FRAME_WIDTH
+    CAP_PROP_FRAME_HEIGHT = cv2.CAP_PROP_FRAME_HEIGHT
+    VideoWriter_fourcc = staticmethod(cv2.VideoWriter_fourcc)
+
+    def __init__(self, camera=None):
         self.opened_with = None
         self.opened_api = None
+        self.camera = camera if camera is not None else DeadCamera()
 
     def VideoCapture(self, device, api=None):
         self.opened_with = device
         self.opened_api = api
-        return DeadCamera()
+        return self.camera
 
     def destroyAllWindows(self):
         pass
+
+
+def patch_cv2(monkeypatch, fake):
+    # capture_and_enroll opens through capture.open_webcam, so both modules'
+    # `cv2` must be the fake or the test would open the real camera.
+    monkeypatch.setattr(capture, "cv2", fake)
+    monkeypatch.setattr(enroll, "cv2", fake)
 
 
 @pytest.mark.parametrize("raw,expected", [("2", 2), ("/dev/video2", "/dev/video2")])
@@ -82,7 +103,7 @@ def test_take_webcam_picture_opens_the_configured_device(monkeypatch, tmp_path):
 
 def test_capture_and_enroll_opens_the_configured_device(monkeypatch, tmp_path):
     fake_cv2 = RecordingCv2()
-    monkeypatch.setattr(enroll, "cv2", fake_cv2)
+    patch_cv2(monkeypatch, fake_cv2)
     config = Config(storage_dir=tmp_path, webcam_device=3)
 
     enroll.capture_and_enroll(config, num_samples=2)
@@ -164,7 +185,7 @@ def test_capture_and_enroll_opens_the_obsbot_by_default(monkeypatch, tmp_path):
     dev, by_id = make_by_id(tmp_path, {BUILTIN_INDEX0: "video0", OBSBOT_INDEX0: "video3"})
     monkeypatch.setattr(capture.resolve_webcam_device, "__defaults__", (by_id,))
     fake_cv2 = RecordingCv2()
-    monkeypatch.setattr(enroll, "cv2", fake_cv2)
+    patch_cv2(monkeypatch, fake_cv2)
 
     enroll.capture_and_enroll(Config(storage_dir=tmp_path), num_samples=2)
 
@@ -191,7 +212,7 @@ def test_take_webcam_picture_opens_through_v4l2(monkeypatch, tmp_path, device):
 @pytest.mark.parametrize("device", ["/dev/video3", 0])
 def test_capture_and_enroll_opens_through_v4l2(monkeypatch, tmp_path, device):
     fake_cv2 = RecordingCv2()
-    monkeypatch.setattr(enroll, "cv2", fake_cv2)
+    patch_cv2(monkeypatch, fake_cv2)
 
     enroll.capture_and_enroll(Config(storage_dir=tmp_path, webcam_device=device), num_samples=2)
 
@@ -203,10 +224,11 @@ def test_capture_and_enroll_opens_through_v4l2(monkeypatch, tmp_path, device):
 # The real camera's first frames are dark (see take_webcam_picture), so the
 # frame that is saved and returned must be the one AFTER the warm-up frames.
 
-class CountingCamera:
+class CountingCamera(DeadCamera):
     """Frame i is the integer i, so the returned frame says which read it was."""
 
     def __init__(self, fail_at=None):
+        super().__init__()
         self.reads = 0
         self.fail_at = fail_at
 
@@ -217,15 +239,10 @@ class CountingCamera:
             return False, None
         return True, np.full((4, 4, 3), i, dtype=np.uint8)
 
-    def release(self):
-        pass
 
 
 def open_counting(monkeypatch, camera):
-    class Cv2(RecordingCv2):
-        def VideoCapture(self, device, api=None):
-            return camera
-    monkeypatch.setattr(capture, "cv2", Cv2())
+    monkeypatch.setattr(capture, "cv2", RecordingCv2(camera))
     monkeypatch.setattr(capture, "Image", type("I", (), {"fromarray": staticmethod(lambda a: None)}))
     monkeypatch.setattr(capture, "_compress_and_save", lambda img, path, config: None)
 
@@ -258,3 +275,28 @@ def test_webcam_warmup_frames_defaults_to_twenty_and_the_flag_sets_it(monkeypatc
     assert main.parse_args().webcam_warmup_frames == 20
     monkeypatch.setattr("sys.argv", ["pystory", "--webcam-warmup-frames", "0"])
     assert main.parse_args().webcam_warmup_frames == 0
+
+
+# --- 1080p ------------------------------------------------------------------
+
+def test_take_webcam_picture_requests_1080p_mjpg(monkeypatch, tmp_path):
+    fake_cv2 = RecordingCv2()
+    monkeypatch.setattr(capture, "cv2", fake_cv2)
+
+    capture.take_webcam_picture("t", Config(storage_dir=tmp_path, webcam_device=0))
+
+    assert fake_cv2.camera.props == {
+        cv2.CAP_PROP_FOURCC: cv2.VideoWriter_fourcc(*"MJPG"),
+        cv2.CAP_PROP_FRAME_WIDTH: 1920,
+        cv2.CAP_PROP_FRAME_HEIGHT: 1080,
+    }
+
+
+def test_capture_and_enroll_requests_1080p(monkeypatch, tmp_path):
+    fake_cv2 = RecordingCv2()
+    patch_cv2(monkeypatch, fake_cv2)
+
+    enroll.capture_and_enroll(Config(storage_dir=tmp_path, webcam_device=0), num_samples=1)
+
+    assert fake_cv2.camera.props[cv2.CAP_PROP_FRAME_WIDTH] == 1920
+    assert fake_cv2.camera.props[cv2.CAP_PROP_FRAME_HEIGHT] == 1080

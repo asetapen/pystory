@@ -24,6 +24,11 @@ class Config:
     # plugging or unplugging the OBSBOT while running switches cameras.
     webcam_device: int | str = "auto"
 
+    # Capture resolution requested from the camera (see capture.open_webcam).
+    # Saved JPEGs are still scaled down to image_max_dimension.
+    webcam_width: int = 1920
+    webcam_height: int = 1080
+
     # Frames read and discarded after opening the camera, before the one that
     # is saved and checked for a face (see capture.take_webcam_picture).
     webcam_warmup_frames: int = 20
@@ -51,6 +56,10 @@ class Config:
 
     # OBSBOT camera tracking (see obsbot.py).
     obsbot_tracking_enabled: bool = False
+    # Turn AI tracking on (obsbot_ai_mode) when the capture loop starts and off
+    # when it stops, independent of presence. Without an OBSBOT attached,
+    # obsbot-cli reports no device and both calls just log a warning.
+    obsbot_tracking_on_run: bool = True
     obsbot_cli_path: str = "obsbot-cli"
     obsbot_ai_mode: int = 2  # 2 = Single Human Tracking
     obsbot_ai_sub_mode: int = 1  # 1 = UpperBody
