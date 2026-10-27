@@ -17,11 +17,16 @@ class Config:
     webcam_enabled: bool = True
     debug_ui: bool = False
 
-    # Which camera cv2.VideoCapture opens: an integer index (0, 1, ...) as
-    # the OS enumerates video devices, or a device path (e.g. /dev/video2).
-    # Defaults to 0, which on a laptop with an external camera attached is
-    # usually the built-in camera, not the external one.
-    webcam_device: int | str = 0
+    # Which camera cv2.VideoCapture opens: "auto", an integer index (0, 1, ...)
+    # as the OS enumerates video devices, or a device path (e.g. /dev/video2).
+    # "auto" prefers an attached OBSBOT and falls back to index 0 (see
+    # capture.resolve_webcam_device); it is re-resolved on every open, so
+    # plugging or unplugging the OBSBOT while running switches cameras.
+    webcam_device: int | str = "auto"
+
+    # Frames read and discarded after opening the camera, before the one that
+    # is saved and checked for a face (see capture.take_webcam_picture).
+    webcam_warmup_frames: int = 20
 
     # Presence debouncing: consecutive same-direction ticks needed before
     # acting on a lock/unlock decision.
