@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 import logging
 import queue
 import threading
-import tkinter as tk
 
 import mss
+
+try:
+    import tkinter as tk
+except ImportError:  # some Python builds (e.g. CI's) ship without Tk
+    tk = None
 
 from pystory.config import Config
 
@@ -53,6 +59,10 @@ class LockOverlay:
     """
 
     def __init__(self, config: Config):
+        # Checked here, on the caller's thread, so a missing Tk stops pystory
+        # at startup instead of killing the overlay thread and never locking.
+        if tk is None:
+            raise RuntimeError("--lock-overlay needs tkinter (on Ubuntu: apt install python3-tk)")
         self.config = config
         self._cmd_queue: queue.Queue[str] = queue.Queue()
         self._root: tk.Tk | None = None

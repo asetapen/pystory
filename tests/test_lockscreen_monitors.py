@@ -179,6 +179,25 @@ def test_unknown_layout_falls_back_to_one_fullscreen_window(monkeypatch):
     assert fake.windows[0].mapped
 
 
+def test_lockscreen_imports_without_tkinter(tmp_path):
+    import subprocess
+    import sys
+
+    code = (
+        "import sys; sys.modules['tkinter'] = None\n"
+        "import pystory.lockscreen as l\n"
+        "assert l.tk is None\n"
+        "from pystory.config import Config\n"
+        "try:\n"
+        "    l.LockOverlay(Config())\n"
+        "except RuntimeError as e:\n"
+        "    print('refused:', e)\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "refused: --lock-overlay needs tkinter" in r.stdout
+
+
 class FakeMss:
     def __init__(self, monitors=None, error=None):
         self.monitors = monitors
